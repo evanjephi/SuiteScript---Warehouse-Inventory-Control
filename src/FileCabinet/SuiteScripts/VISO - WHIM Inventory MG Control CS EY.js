@@ -1,0 +1,376 @@
+/**
+ * @NApiVersion 2.1
+ * @NScriptType ClientScript
+ */
+define(['N/currentRecord'], function (currentRecord) {
+
+    function pageInit(context) {
+        setTimeout(function () {
+            createButton('rcv_submit_btn', 'Submit for QC', handleRcvItems, 'warehousereceiving')
+            createButton('qc_submit_btn', 'QC Completed', handleQcItems, 'productqc')
+            createButton('so_submit_btn', 'Release For Shipment', handleReleaseSO, 'sb_salesorder')
+            createButton('so_qc_submit_btn', 'Prepare For QC', handleQCRealeaseSO, 'soproductqc')
+
+        }, 1000)
+    }
+
+    function createButton(id, label, fn, sublistId) {
+        const btn = document.createElement('input')
+        btn.type = 'button'
+        btn.id = id
+        btn.value = label
+        btn.style.cssText = `
+        background-color: #1a6fc4;
+        border: none;
+        color: white;
+        font-size: 13px;
+        padding: 5px 14px;
+        border-radius: 3px;
+        font-weight: bold;
+        margin: 5px;
+        cursor: pointer;
+    `
+        const textInput = document.createElement('input')
+        textInput.type = 'text'
+        textInput.id = id
+        textInput.placeholder = 'Search Item'
+        textInput.style.cssText = `
+        border: none;
+        font-size: 13px;
+        padding: 5px 14px;
+        border-radius: 3px;
+        margin: 5px;
+    `
+        textInput.oninput = function () {
+            const layer = []
+            const searchVal = this.value.toLowerCase()
+            const table = document.getElementById(sublistId + '_layer')
+
+            if (!table) return
+            if (fn === handleReleaseSO || fn === handleQCRealeaseSO) {
+                table.querySelectorAll('tr[id^="' + sublistId + 'row"]').forEach(function (row) {
+                    // get the hidden so_id value from this row
+                    const soId = row.querySelector('[id^="so_id"]')
+                    const soIdVal = soId ? soId.value.toLowerCase() : ''
+
+                    // get visible text of the row
+                    const text = row.textContent.toLowerCase()
+
+                    // match against SO # or item name
+                    row.style.display = (text.includes(searchVal) || soIdVal.includes(searchVal)) ? '' : 'none'
+                })
+            } else table.querySelectorAll('tr[id^="' + sublistId + 'row"]').forEach(function (row) {
+                const text = row.textContent.toLowerCase()
+                row.style.display = text.includes(searchVal) ? '' : 'none'
+            })
+        }
+
+        textInput.oninput = function () {
+            const searchVal = this.value.toLowerCase()
+            const layer = document.getElementById(sublistId + '_layer')
+            if (!layer) return
+
+            layer.querySelectorAll('tr[id^="' + sublistId + 'row"]').forEach(function (row) {
+                // get the hidden so_id value from this row
+                const soId = row.querySelector('[id^="so_id"]')
+                const soIdVal = soId ? soId.value.toLowerCase() : ''
+
+                // get visible text of the row
+                const text = row.textContent.toLowerCase()
+
+                // match against SO # or item name
+                row.style.display = (text.includes(searchVal) || soIdVal.includes(searchVal)) ? '' : 'none'
+            })
+        }
+
+
+        btn.addEventListener('mouseover', () => {
+            btn.style.backgroundColor = '#155a9e'
+        })
+
+        btn.addEventListener('mouseout', () => {
+            btn.style.backgroundColor = '#1a6fc4'
+        })
+
+        btn.onclick = fn
+
+        const sublist = document.getElementById(sublistId + '_layer')
+        if (sublist) {
+            sublist.insertBefore(textInput, sublist.firstChild)
+            sublist.appendChild(btn)
+        } else {
+            alert('sublist not found: ' + sublistId + '_layer')
+        }
+    }
+
+    function handleReleaseSO() {
+        const currRec = currentRecord.get()    // ← get once at the top
+
+        if (!hasSelectedLine(currRec, 'sb_salesorder', ['so_select', 'so_confirmqty'])) {
+            alert('Please check and confirm qty for at least one Sales Order for submission.')
+            return
+        }
+
+        const lines = []
+        const lineCount = currRec.getLineCount({ sublistId: 'sb_salesorder' })
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId: 'sb_salesorder',
+                fieldId: 'so_select',
+                line: i
+            })
+
+            if (isSelected === true) {
+                const confirmQty = currRec.getSublistValue({
+                    sublistId: 'sb_salesorder',
+                    fieldId: 'so_confirmqty',
+                    line: i
+                })
+                lines.push({ line: i, confirmQty })
+            }
+        }
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'releasing', lines })
+        })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message)
+
+                //const currRec = currentRecord.get()
+                clearSelectedLine(currRec, lines, 'sb_salesorder', ['so_select', 'so_confirmqty'])
+            })
+            .catch(err => {
+                alert('Error: ' + err)
+            })
+    }
+
+    function handleQCRealeaseSO() {
+        const currRec = currentRecord.get()    //get once at the top
+
+        if (!hasSelectedLine(currRec, 'soproductqc', ['so_qcselect', 'so_qcconfirmqty'])) {
+            alert('Please check and confirm qty for at least one Sales Order for submission.')
+            return
+        }
+
+        const lines = []
+        const lineCount = currRec.getLineCount({ sublistId: 'soproductqc' })
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId: 'soproductqc',
+                fieldId: 'so_qcselect',
+                line: i
+            })
+
+            if (isSelected === true) {
+                const soId = currRec.getSublistValue({
+                    sublistId: 'soproductqc',
+                    fieldId: 'so_qcid',
+                    line: i
+                })
+                const lineIndex = currRec.getSublistValue({  
+                    sublistId: 'soproductqc',
+                    fieldId: 'so_qclineindex',
+                    line: i
+                })
+                const confirmQty = currRec.getSublistValue({
+                    sublistId: 'soproductqc',
+                    fieldId: 'so_qcconfirmqty',
+                    line: i
+                })
+                lines.push({soId, lineIndex, line: i, confirmQty })
+            }
+        }
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'soQCRelease', lines })
+        })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message)
+
+                //const currRec = currentRecord.get()
+                clearSelectedLine(currRec, lines, 'soproductqc', ['so_qcselect', 'so_qcconfirmqty'])
+            })
+            .catch(err => {
+                alert('Error: ' + err)
+            })
+    }
+
+    function handleRcvItems() {
+        const currRec = currentRecord.get()
+
+        if (!hasSelectedLine(currRec, 'warehousereceiving', ['rcv_select', 'rcv_confirmqty'])) {
+            alert('Please check at least one item for submission.')
+            return
+        }
+        const lines = []
+        const lineCount = currRec.getLineCount({ sublistId: 'warehousereceiving' })
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId: 'warehousereceiving',
+                fieldId: 'rcv_select',
+                line: i
+            })
+
+            if (isSelected === true) {
+                const confirmQty = currRec.getSublistValue({
+                    sublistId: 'warehousereceiving',
+                    fieldId: 'rcv_confirmqty',
+                    line: i
+                })
+                lines.push({ line: i, confirmQty })
+            }
+        }
+
+        // send to suitelet via fetch
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'receiving', lines })
+        })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message)
+                clearSelectedLine(currRec, lines, 'warehousereceiving', ['rcv_select', 'rcv_confirmqty'])
+
+            })
+            .catch(err => {
+                alert('Error: ' + err)
+            })
+    }
+
+    function handleQcItems() {
+        const currRec = currentRecord.get()
+
+        if (!hasSelectedLine(currRec, 'productqc', ['qc_select', 'rcv_confirmqty'])) {
+            alert('Please check at least one item for submission.')
+            return
+        }
+
+        // collect selected lines data
+        const lines = []
+        const lineCount = currRec.getLineCount({ sublistId: 'productqc' })
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId: 'productqc',
+                fieldId: 'qc_select',
+                line: i
+            })
+
+            if (isSelected === true) {
+                const confirmQty = currRec.getSublistValue({
+                    sublistId: 'productqc',
+                    fieldId: 'qc_confirmqty',
+                    line: i
+                })
+                const updatedStatus = currRec.getSublistValue({
+                    sublistId: 'productqc',
+                    fieldId: 'qc_updatestatus',
+                    line: i
+                })
+
+                lines.push({ line: i, confirmQty, updatedStatus })
+            }
+        }
+
+        // send to suitelet via fetch
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'qc', lines })
+        })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message)
+                clearSelectedLine(currRec, lines, 'productqc', ['qc_select', 'qc_confirmqty'])
+
+            })
+            .catch(err => {
+                alert('Error: ' + err)
+            })
+    }
+
+    function saveRecord(context) {
+        const currRec = context.currentRecord
+        const lineCount = currRec.getLineCount({ sublistId: 'warehousereceiving' })
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId: 'warehousereceiving',
+                fieldId: 'rcv_select',
+                line: i
+            })
+            const qtyValue = currRec.getSublistValue({
+                sublistId: 'warehousereceiving',
+                fieldId: 'rcv_confirmqty',
+                line: i
+            })
+
+            if (isSelected === true && !qtyValue) {
+                alert('Please enter a Confirm Quantity for selected lines (Line ' + (i + 1) + ')')
+                return false
+            }
+        }
+        return true
+    }
+
+    function hasSelectedLine(currRec, sublistId, selectFieldId) {
+        const lineCount = currRec.getLineCount({ sublistId })
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId,
+                fieldId: selectFieldId[0],
+                line: i
+            })
+            const confirmQty = currRec.getSublistValue({
+                sublistId,
+                fieldId: selectFieldId[1],
+                line: i
+            })
+            if (isSelected === true && confirmQty) return true
+        }
+        return false
+    }
+
+    function clearSelectedLine(currRec, lines, sublistId, fieldId) {
+        lines.forEach(({ line }) => {
+            currRec.selectLine({
+                sublistId,
+                line: line
+            })
+
+            currRec.setCurrentSublistValue({
+                sublistId,
+                fieldId: fieldId[1],
+                value: ''
+            })
+
+            currRec.setCurrentSublistValue({
+                sublistId,
+                fieldId: fieldId[0],
+                value: false
+            })
+
+            currRec.commitLine({
+                sublistId
+            })
+        })
+    }
+
+    return {
+        pageInit,
+        saveRecord,
+        handleRcvItems,
+        handleQcItems
+    }
+})

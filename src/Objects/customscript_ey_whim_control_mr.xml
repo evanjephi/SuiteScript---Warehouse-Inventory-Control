@@ -1,0 +1,26 @@
+<mapreducescript scriptid="customscript_ey_whim_control_mr">
+    <name>WHIM Inventory Control Mr EY</name>
+    <scriptfile>[/SuiteScripts/WHIM Inventory MG Control Mr EY.js]</scriptfile>
+    <isinactive>F</isinactive>
+    <notifyowner>T</notifyowner>
+
+    <scriptcustomfields>
+        <scriptcustomfield scriptid="custscript_action">
+            <fieldtype>TEXTAREA</fieldtype>
+            <label>Action</label>
+        </scriptcustomfield>
+        <scriptcustomfield scriptid="custscript_data">
+            <fieldtype>TEXTAREA</fieldtype>
+            <label>Data</label>
+        </scriptcustomfield>
+    </scriptcustomfields>
+
+    <scriptdeployments>
+        <scriptdeployment scriptid="customdeploy_ey_whim_control_mr">
+            <title>WHIM Inventory Management Control</title>
+            <isdeployed>T</isdeployed>
+            <loglevel>DEBUG</loglevel>
+            <status>NOTSCHEDULED</status>
+        </scriptdeployment>
+    </scriptdeployments>
+</mapreducescript>

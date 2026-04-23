@@ -1,0 +1,11 @@
+<suitelet scriptid="customscript_ey_whim_control_sl">
+  <name>WHIM Inventory Control SL EY</name>
+  <scriptfile>[/SuiteScripts/WHIM Inventory MG Control SL EY.js]</scriptfile>
+  <scriptdeployments>
+    <scriptdeployment scriptid="customdeploy_ey_whim_control_sl">
+      <title>WHIM Inventory Management Control</title>
+      <status>TESTING</status>
+      <isdeployed>T</isdeployed>
+    </scriptdeployment>
+  </scriptdeployments>
+</suitelet>
