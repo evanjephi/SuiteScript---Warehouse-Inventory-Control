@@ -301,7 +301,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     const mrTask = task.create({
                         taskType: task.TaskType.MAP_REDUCE,
                         scriptId: 'customscript_ey_whim_inventory_control_mr',
-                        deploymentId: 'customdeploy_ey_whim_control__mr',
+                        deploymentId: 'customdeploy_ey_whim_control_mr',
                         params: {
 
                             custscript_data: JSON.stringify(line)
@@ -339,7 +339,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     const mrTask = task.create({
                         taskType: task.TaskType.MAP_REDUCE,
                         scriptId: 'customscript_ey_whim_inventory_control_mr',
-                        deploymentId: 'customdeploy_ey_whim_control__mr',
+                        deploymentId: 'customdeploy_ey_whim_control_mr',
                         params: {
                             custscript_action: action,
                             custscript_data: JSON.stringify(line)
