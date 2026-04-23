@@ -328,32 +328,25 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             }
 
             if (action === 'soQCRelease') {
-                lines.forEach(line => {
-                    log.debug(action, lines )
-                    const stageData = []
 
-                    stageData.push({
+                log.debug('soQCRelease lines', JSON.stringify(lines))
 
-                    })
-
-                    const mrTask = task.create({
-                        taskType: task.TaskType.MAP_REDUCE,
-                        scriptId: 'customscript_ey_whim_inventory_control_mr',
-                        deploymentId: 'customdeploy_ey_whim_control_mr',
-                        params: {
-                            custscript_action: action,
-                            custscript_data: JSON.stringify(line)
-                        }
-                    })
-
-                    mrTask.submit()
-
-                    context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
-                    context.response.write(JSON.stringify({
-                        message: 'Sales order is now in QC production stage. Items are avaliable for assembly.'
-                    }))
-
+                const mrTask = task.create({
+                    taskType: task.TaskType.MAP_REDUCE,
+                    scriptId: 'customscript_ey_whim_inventory_control_mr',
+                    deploymentId: 'customdeploy_ey_whim_control_mr',
+                    params: {
+                        custscript_mr_action: action,
+                        custscript_data: JSON.stringify(lines)
+                    }
                 })
+
+                mrTask.submit()
+
+                context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
+                context.response.write(JSON.stringify({
+                    message: 'Sales order is now in QC production stage. Items are available for assembly.'
+                }))
             }
 
 
@@ -474,9 +467,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         })
         so_productqc_sb.addField({ id: 'so_qctranidref', type: ui.FieldType.TEXT, label: 'Ref.' })
         so_productqc_sb.addField({ id: 'so_qcid', type: ui.FieldType.INTEGER, label: 'SO ID' })
-         .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
         so_productqc_sb.addField({ id: 'so_qclineindex', type: ui.FieldType.INTEGER, label: 'Line Index' })
-          .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
         so_productqc_sb.addField({ id: 'so_qcselect', type: ui.FieldType.CHECKBOX, label: 'Select' })
         so_productqc_sb.addField({ id: 'so_qctranid', type: ui.FieldType.TEXT, label: 'SO #' })
         so_productqc_sb.addField({ id: 'so_qcstatus', type: ui.FieldType.TEXT, label: 'Status' })
