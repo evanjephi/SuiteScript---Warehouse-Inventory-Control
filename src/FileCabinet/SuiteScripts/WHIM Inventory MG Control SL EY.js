@@ -514,7 +514,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 'quantityshiprecv',
                 'custbody_release_order',
                 'custcol_release_order',
-                { name: 'line' }
+                { name: 'lineuniquekey' },
+                'custcol_qty_prepared',
+                'custcol_prep_stage'
             ]
         })
 
@@ -525,14 +527,17 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const tranid = s.getValue('tranid')
             const status = s.getText('status')
             const item = s.getText('item')
-
             const qty = Number(s.getValue('quantity')) || 0
             const qtyfulf = Number(s.getValue('quantityshiprecv')) || 0
             const qtycomm = Number(s.getValue('quantitycommitted')) || 0
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
+            const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
+            const prepStage = s.getText('custcol_prep_stage') || ''
+            const isPreparedStage = String(prepStage).toLowerCase() === 'prepared'
 
             if (!isMainRelease) return true
+            if (isPreparedStage) return true
             if (item && qtyfulf >= 0 && qtyfulf < qty) {
                 if (!isLineRelease) return true
 
@@ -549,7 +554,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     qty,
                     qtyfulf,
                     qtycomm,
-                    lineIndex: s.getValue('line')
+                    lineIndex: s.getValue('lineuniquekey'),
+                    qtyPrepared,
+                    prepStage
                 })
             }
 

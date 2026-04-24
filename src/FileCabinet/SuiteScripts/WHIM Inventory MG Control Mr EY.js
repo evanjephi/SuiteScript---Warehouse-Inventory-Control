@@ -16,17 +16,17 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         const dataStr = script.getParameter({ name: 'custscript_data' })
 
         if (!action) {
-            log.error({ 
-                title: 'Missing action', 
-                details: 'custscript_action is empty' 
+            log.error({
+                title: 'Missing action',
+                details: 'custscript_action is empty'
             })
             return []
         }
 
         if (!dataStr) {
-            log.error({ 
-                title: 'Missing data', 
-                details: 'custscript_data is empty' 
+            log.error({
+                title: 'Missing data',
+                details: 'custscript_data is empty'
             })
             return []
         }
@@ -35,17 +35,17 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         try {
             lines = JSON.parse(dataStr)
         } catch (e) {
-            log.error({ 
-                title: 'Invalid JSON in custscript_data', 
-                details: e.message || String(e) 
+            log.error({
+                title: 'Invalid JSON in custscript_data',
+                details: e.message || String(e)
             })
             return []
         }
 
         if (!Array.isArray(lines)) {
-            log.error({ 
-                title: 'Invalid data type', 
-                details: 'custscript_data must be an array' 
+            log.error({
+                title: 'Invalid data type',
+                details: 'custscript_data must be an array'
             })
             return []
         }
@@ -59,6 +59,10 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
         if (action === 'soQCRelease') {
             if (!line.soId && line.soId !== 0) return
+            log.debug({
+                title: 'Map SO-QC-Release',
+                details: `SO ID ${line.soId} Line  ${JSON.stringify(line)} with action ${action}`
+            })
             context.write({
                 key: String(line.soId),
                 value: JSON.stringify(line)
@@ -103,11 +107,11 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
         try {
             if (action === 'soQCRelease') {
-                log.debug({
-                    title: 'Handling SO QC Release',
-                    details: `SO ID ${context.key} with ${lines.length} lines`
-                })
-               // handleQCRelease(context.key, lines)
+                // log.debug({
+                //     title: 'Reduce soQCRelease',
+                //     details: `SO ID ${context.key} with ${JSON.stringify(lines)}`
+                // })
+                handleQCRelease(context.key, lines)
             } else if (action === 'releasing') {
                 handleBinTransfer(lines)
             } else {
@@ -131,55 +135,60 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         }
     }
 
-    function handleQCRelease(soId, lines) {
-        const rec = record.load({
-            type: record.Type.SALES_ORDER,
-            id: soId
-        })
-
-        lines.forEach(({ lineIndex, confirmQty }) => {
-            const index = Number(lineIndex)
-            const qtyToAdd = Number(confirmQty) || 0
-            if (Number.isNaN(index) || qtyToAdd <= 0) return
-
-            const orderedQty = Number(rec.getSublistValue({
-                sublistId: 'item',
-                fieldId: 'quantity',
-                line: index
-            })) || 0
-
-            const alreadyPrepared = Number(rec.getSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_qty_prepared',
-                line: index
-            })) || 0
-
-            const newPreparedQty = alreadyPrepared + qtyToAdd
-
-            let stage = 'pending'
-            if (newPreparedQty > 0 && newPreparedQty < orderedQty) {
-                stage = 'partial'
-            } else if (newPreparedQty >= orderedQty && orderedQty > 0) {
-                stage = 'prepared'
-            }
-
-            rec.setSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_qty_prepared',
-                line: index,
-                value: newPreparedQty
+    /*     function handleQCRelease(soId, lines) {
+            const rec = record.load({
+                type: record.Type.SALES_ORDER,
+                id: soId
             })
-
-            rec.setSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_prep_stage',
-                line: index,
-                value: stage
+    
+            lines.forEach(({ lineIndex, confirmQty }) => {
+                const index = Number(lineIndex)
+                const qtyToAdd = Number(confirmQty) || 0
+                if (Number.isNaN(index) || qtyToAdd <= 0) return
+    
+                const orderedQty = Number(rec.getSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'quantity',
+                    line: index
+                }))
+    
+                const alreadyPrepared = Number(rec.getSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'custcol_qty_prepared',
+                    line: index
+                })) || 0
+    
+                const newPreparedQty = alreadyPrepared + qtyToAdd
+    
+                let stage = 'pending'
+                if (newPreparedQty > 0 && newPreparedQty < orderedQty) {
+                    stage = 'partial'
+                } else if (newPreparedQty >= orderedQty && orderedQty > 0) {
+                    stage = 'prepared'
+                }
+    
+                log.debug({
+                    title: 'Processing QC release line',
+                    details: `Line ${index} ordered ${orderedQty} already prepared ${alreadyPrepared} adding ${qtyToAdd} | newPreparedQty ${newPreparedQty}stage ${stage}`
+                })
+    
+                // rec.setSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'custcol_qty_prepared',
+                //     line: index,
+                //     value: newPreparedQty
+                // })
+    
+                // rec.setSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'custcol_prep_stage',
+                //     line: index,
+                //     value: stage
+                // })
             })
-        })
-
-        rec.save()
-    }
+    
+            //   rec.save()
+        } */
 
     function handleBinTransfer(lines) {
         const transfer = record.create({
@@ -258,6 +267,88 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         const transferId = transfer.save()
         log.audit({ title: 'Bin transfer created', details: `ID ${transferId}` })
     }
+
+    function handleQCRelease(soId, lines) {
+        const rec = record.load({
+            type: record.Type.SALES_ORDER,
+            id: soId
+        })
+
+        const lineKeyToIndex = buildLineKeyToIndexMap(rec)
+
+        lines.forEach(({ lineIndex, confirmQty }) => {
+            const lineUniqueKey = String(lineIndex)
+            const index = lineKeyToIndex[lineUniqueKey]
+            const qtyToAdd = Number(confirmQty) || 0
+
+            if (index === undefined || qtyToAdd <= 0) {
+                log.error({
+                    title: 'QC line not resolved',
+                    details: `[SO ${soId} lineUniqueKey ${lineUniqueKey} confirmQty ${confirmQty}]`
+                })
+                return
+            }
+            log.debug({ title: 'QC line index', details: index, lineKeyToIndex, lineUniqueKey })
+            const orderedQty = Number(rec.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'quantity',
+                line: index
+            })) || 0
+
+            const alreadyPrepared = Number(rec.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'custcol_qty_prepared',
+                line: index
+            })) || 0
+
+            const newPreparedQty = alreadyPrepared + qtyToAdd
+
+            let stage = 'pending'
+            if (newPreparedQty > 0 && newPreparedQty < orderedQty) stage = 'partial'
+            if (orderedQty > 0 && newPreparedQty >= orderedQty) stage = 'prepared'
+
+            rec.setSublistValue({
+                sublistId: 'item',
+                fieldId: 'custcol_qty_prepared',
+                line: index,
+                value: newPreparedQty
+            })
+
+            rec.setSublistValue({
+                sublistId: 'item',
+                fieldId: 'custcol_prep_stage',
+                line: index,
+                value: stage
+            })
+
+            log.debug({
+                title: 'QC line updated',
+                details: `[SO ${soId} key ${lineUniqueKey} idx ${index} ordered ${orderedQty} newPrepared ${newPreparedQty} stage ${stage}]`
+            })
+        })
+
+       rec.save()
+    }
+
+    function buildLineKeyToIndexMap(rec) {
+        const map = {}
+        const lineCount = rec.getLineCount({ sublistId: 'item' }) || 0
+
+        for (let i = 0; i < lineCount; i++) {
+            const key = rec.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'lineuniquekey',
+                line: i
+            })
+
+            if (key !== null && key !== undefined && key !== '') {
+                map[String(key)] = i
+            }
+        }
+
+        return map
+    }
+
 
     function summarize(summary) {
         summary.mapSummary.errors.iterator().each((key, error) => {
