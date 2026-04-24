@@ -378,53 +378,25 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         salesorder_sb.addField({ id: 'so_confirmqty', type: ui.FieldType.INTEGER, label: 'Confirm Shippable Qty' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
 
-
-        const so_ss = search.create({
-            type: 'salesorder',
-            filters: [
-                ['mainline', 'is', 'F'],
-                'AND',
-                ['location', 'anyof', loc],
-                'AND',
-                ['ordertype', 'anyof', ot],
-                'AND',
-                ['item.type', 'anyof', ['InvtPart', 'Kit']],
-                'AND',
-                ['taxline', 'is', 'F'],
-                'AND',
-                ['status', 'anyof', [
-                    'SalesOrd:D',
-                    'SalesOrd:E',
-                    'SalesOrd:B',
-                    'SalesOrd:F'
-                ]]
-            ],
-            columns: [
-                'tranid',
-                'status',
-                'item',
-                'quantity',
-                'quantityuom',
-                'quantitycommitted',
-                'quantityshiprecv',
-                'custbody_release_order',
-                'custcol_release_order'
-            ]
-        })
-
+        const so_ss = createSOSearch(loc, ot)
 
         const soContent = {}
         so_ss.run().each(s => {
             const tranid = s.getValue('tranid')
             const status = s.getText('status')
             const item = s.getText('item')
-
+            const prepStage = s.getValue('custcol_prep_stage') || ''
+            const isStage = String(prepStage).toLowerCase() === 'prepared' || String(prepStage).toLowerCase() === 'partial'
             const qty = Number(s.getValue('quantity')) || 0
             const qtyfulf = Number(s.getValue('quantityshiprecv')) || 0
             const qtycomm = Number(s.getValue('quantitycommitted')) || 0
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
+            const qtyBackordered = Number(s.getValue('quantitybackordered')) 
+
+            
             if (!isMainRelease) return true
+            if (!isStage) return true
             if (item && qtyfulf >= 0 && qtyfulf < qty) {
                 if (!isLineRelease) return true
                 if (!soContent[tranid]) {
@@ -438,7 +410,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     item,
                     qty,
                     qtyfulf,
-                    qtycomm
+                    qtycomm,
+                    qtyBackordered
                 })
             }
 
@@ -482,43 +455,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         so_productqc_sb.addField({ id: 'so_qcconfirmqty', type: ui.FieldType.INTEGER, label: 'Confirm QC Qty' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
 
-        const so_qc_ss = search.create({
-            type: 'salesorder',
-            filters: [
-                ['mainline', 'is', 'F'],
-                'AND',
-                ['location', 'anyof', loc],
-                'AND',
-                ['ordertype', 'anyof', ot],
-                'AND',
-                ['item.type', 'anyof', ['InvtPart', 'Kit']],
-                'AND',
-                ['taxline', 'is', 'F'],
-                'AND',
-                ['status', 'anyof', [
-                    'SalesOrd:D',
-                    'SalesOrd:E',
-                    'SalesOrd:B',
-                    'SalesOrd:F'
-                ]]
-            ],
-            columns: [
-                'internalid',
-                'tranid',
-                'status',
-                'item',
-                'type',
-                'quantity',
-                'quantityuom',
-                'quantitycommitted',
-                'quantityshiprecv',
-                'custbody_release_order',
-                'custcol_release_order',
-                { name: 'lineuniquekey' },
-                'custcol_qty_prepared',
-                'custcol_prep_stage'
-            ]
-        })
+        const so_qc_ss = createSOSearch(loc, ot)
 
 
         const soContent = {}
@@ -533,7 +470,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
             const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
-            const prepStage = s.getText('custcol_prep_stage') || ''
+            const prepStage = s.getValue('custcol_prep_stage') || ''
             const isPreparedStage = String(prepStage).toLowerCase() === 'prepared'
 
             if (!isMainRelease) return true
@@ -583,6 +520,47 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
     }
 })
 
+
+function createSOSearch(loc, ot) {
+    return search.create({
+        type: 'salesorder',
+        filters: [
+            ['mainline', 'is', 'F'],
+            'AND',
+            ['location', 'anyof', loc],
+            'AND',
+            ['ordertype', 'anyof', ot],
+            'AND',
+            ['item.type', 'anyof', ['InvtPart', 'Kit']],
+            'AND',
+            ['taxline', 'is', 'F'],
+            'AND',
+            ['status', 'anyof', [
+                'SalesOrd:D',
+                'SalesOrd:E',
+                'SalesOrd:B',
+                'SalesOrd:F'
+            ]]
+        ],
+        columns: [
+            'internalid',
+            'tranid',
+            'status',
+            'item',
+            'type',
+            'quantity',
+            'quantityuom',
+            'quantitycommitted',
+            'quantityshiprecv',
+            'custbody_release_order',
+            'custcol_release_order',
+            { name: 'lineuniquekey' },
+            'custcol_qty_prepared',
+            'custcol_prep_stage',
+            'quantitybackordered'
+        ]
+    })
+}
 
 function addStatusOptions(statusField, statusObj, excludeValues = []) {
     for (const name in statusObj) {
