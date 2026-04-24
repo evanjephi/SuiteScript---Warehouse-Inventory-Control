@@ -103,7 +103,11 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
         try {
             if (action === 'soQCRelease') {
-                handleQCRelease(context.key, lines)
+                log.debug({
+                    title: 'Handling SO QC Release',
+                    details: `SO ID ${context.key} with ${lines.length} lines`
+                })
+               // handleQCRelease(context.key, lines)
             } else if (action === 'releasing') {
                 handleBinTransfer(lines)
             } else {

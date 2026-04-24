@@ -30,7 +30,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             })
             actionField.updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
 
-            form.clientScriptModulePath = '/SuiteScripts/ WHIM Inventory MG Control CS EY.js'
+            form.clientScriptModulePath = '/SuiteScripts/WHIM Inventory MG Control CS EY.js'
 
             // Sales Order fulfilment
             releasedOrders(form, LOCATION, CLASS)
@@ -300,7 +300,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     //logic here
                     const mrTask = task.create({
                         taskType: task.TaskType.MAP_REDUCE,
-                        scriptId: 'customscript_ey_whim_inventory_control_mr',
+                        scriptId: 'customscript_ey_whim_control_mr',
                         deploymentId: 'customdeploy_ey_whim_control_mr',
                         params: {
                             custscript_action: action,
@@ -317,7 +317,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             if (action === 'releasing') {
                 const mrTask = task.create({
                     taskType: task.TaskType.MAP_REDUCE,
-                    scriptId: 'customscript_ey_whim_inventory_control_mr',
+                    scriptId: 'customscript_ey_whim_control_mr',
                     deploymentId: 'customdeploy_ey_whim_control_mr',
                     params: {
                         custscript_action: action,
@@ -339,7 +339,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
                 const mrTask = task.create({
                     taskType: task.TaskType.MAP_REDUCE,
-                    scriptId: 'customscript_ey_whim_inventory_control_mr',
+                    scriptId: 'customscript_ey_whim_control_mr',
                     deploymentId: 'customdeploy_ey_whim_control_mr',
                     params: {
                         custscript_action: action,
