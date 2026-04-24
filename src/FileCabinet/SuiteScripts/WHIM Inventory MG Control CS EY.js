@@ -172,9 +172,14 @@ define(['N/currentRecord'], function (currentRecord) {
                     fieldId: 'so_qcid',
                     line: i
                 })
-                const lineIndex = currRec.getSublistValue({  
+                const lineIndex = currRec.getSublistValue({
                     sublistId: 'soproductqc',
                     fieldId: 'so_qclineindex',
+                    line: i
+                })
+                const qtyOrder = currRec.getSublistValue({
+                    sublistId: 'soproductqc',
+                    fieldId: 'so_qcitemqty',
                     line: i
                 })
                 const confirmQty = currRec.getSublistValue({
@@ -182,7 +187,11 @@ define(['N/currentRecord'], function (currentRecord) {
                     fieldId: 'so_qcconfirmqty',
                     line: i
                 })
-                lines.push({soId, lineIndex, line: i, confirmQty })
+                if (confirmQty > qtyOrder) {
+                    alert('Confirm Qty cannot be greater than Ordered Qty (Line ' + (i + 1) + ')')
+                    return
+                }
+                lines.push({ soId, lineIndex, line: i, qtyOrder, confirmQty })
             }
         }
 

@@ -337,6 +337,17 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
                 log.debug('soQCRelease lines', JSON.stringify(lines))
 
+                const overPrepared = findOverPreparedLines(lines)
+                if (overPrepared.length > 0) {
+                    context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
+                    context.response.write(JSON.stringify({
+                        error: true,
+                        message: 'Submission blocked: prepared quantity cannot exceed order quantity.',
+                        details: overPrepared
+                    }))
+                    return
+                }
+
                 const mrTask = task.create({
                     taskType: task.TaskType.MAP_REDUCE,
                     scriptId: 'customscript_ey_whim_control_mr',
@@ -392,9 +403,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const qtycomm = Number(s.getValue('quantitycommitted')) || 0
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
-            const qtyBackordered = Number(s.getValue('quantitybackordered')) 
 
-            
+
             if (!isMainRelease) return true
             if (!isStage) return true
             if (item && qtyfulf >= 0 && qtyfulf < qty) {
@@ -410,8 +420,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     item,
                     qty,
                     qtyfulf,
-                    qtycomm,
-                    qtyBackordered
+                    qtycomm
                 })
             }
 
@@ -451,7 +460,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         so_productqc_sb.addField({ id: 'so_qctranid', type: ui.FieldType.TEXT, label: 'SO #' })
         so_productqc_sb.addField({ id: 'so_qcstatus', type: ui.FieldType.TEXT, label: 'Status' })
         so_productqc_sb.addField({ id: 'so_qcitem', type: ui.FieldType.TEXT, label: 'Item' })
-        so_productqc_sb.addField({ id: 'so_qcitemqty', type: ui.FieldType.INTEGER, label: 'Order Qty Needed' })
+        so_productqc_sb.addField({ id: 'so_qcitemqty', type: ui.FieldType.INTEGER, label: 'Order Qty' })
+        so_productqc_sb.addField({ id: 'so_qcitemqtyshipped', type: ui.FieldType.INTEGER, label: 'Shipped Qty' })
+        so_productqc_sb.addField({ id: 'so_qcitemqtyneeded', type: ui.FieldType.INTEGER, label: 'Assembled Qty' })
         so_productqc_sb.addField({ id: 'so_qcconfirmqty', type: ui.FieldType.INTEGER, label: 'Confirm QC Qty' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
 
@@ -511,56 +522,108 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 so_productqc_sb.setSublistValue({ id: 'so_qcstatus', line: soLine, value: index === 0 ? so.status : ' ' })
 
                 so_productqc_sb.setSublistValue({ id: 'so_qcitem', line: soLine, value: i.item || ' ' })
-                so_productqc_sb.setSublistValue({ id: 'so_qcitemqty', line: soLine, value: i.qty - i.qtyfulf })
+                so_productqc_sb.setSublistValue({ id: 'so_qcitemqty', line: soLine, value: i.qty })
+                so_productqc_sb.setSublistValue({ id: 'so_qcitemqtyshipped', line: soLine, value: i.qtyfulf })
+                so_productqc_sb.setSublistValue({ id: 'so_qcitemqtyneeded', line: soLine, value: i.qtyPrepared })
                 so_productqc_sb.setSublistValue({ id: 'so_qctranidref', line: soLine, value: tranid })
                 so_productqc_sb.setSublistValue({ id: 'so_qcid', line: soLine, value: so.id })
                 soLine++;
             })
         }
     }
+
+    function createSOSearch(loc, ot) {
+        return search.create({
+            type: 'salesorder',
+            filters: [
+                ['mainline', 'is', 'F'],
+                'AND',
+                ['location', 'anyof', loc],
+                'AND',
+                ['ordertype', 'anyof', ot],
+                'AND',
+                ['item.type', 'anyof', ['InvtPart', 'Kit']],
+                'AND',
+                ['taxline', 'is', 'F'],
+                'AND',
+                ['status', 'anyof', [
+                    'SalesOrd:D',
+                    'SalesOrd:E',
+                    'SalesOrd:B',
+                    'SalesOrd:F'
+                ]]
+            ],
+            columns: [
+                'internalid',
+                'tranid',
+                'status',
+                'item',
+                'type',
+                'quantity',
+                'quantityuom',
+                'quantitycommitted',
+                'quantityshiprecv',
+                'custbody_release_order',
+                'custcol_release_order',
+                { name: 'lineuniquekey' },
+                'custcol_qty_prepared',
+                'custcol_prep_stage'
+            ]
+        })
+    }
+
+    function findOverPreparedLines(lines) {
+        const invalid = []
+
+        lines.forEach(line => {
+            const soId = Number(line.soId)
+            const lineUniqueKey = String(line.lineIndex || '')
+            const confirmQty = Number(line.confirmQty) || 0
+            if (!soId || !lineUniqueKey || confirmQty <= 0) return
+
+            const lineData = getSOLineQtyByUniqueKey(soId, lineUniqueKey)
+            if (!lineData) return
+
+            const newPrepared = lineData.qtyPrepared + confirmQty
+            if (newPrepared > lineData.orderedQty) {
+                invalid.push({
+                    soId,
+                    lineUniqueKey,
+                    orderedQty: lineData.orderedQty,
+                    qtyPrepared: lineData.qtyPrepared,
+                    confirmQty,
+                    newPrepared
+                })
+            }
+        })
+
+        return invalid
+    }
+
+    function getSOLineQtyByUniqueKey(soId, lineUniqueKey) {
+        let resultData = null
+
+        search.create({
+            type: 'salesorder',
+            filters: [
+                ['internalid', 'anyof', soId],
+                'AND',
+                ['mainline', 'is', 'F'],
+                'AND',
+                ['lineuniquekey', 'equalto', lineUniqueKey]
+            ],
+            columns: ['quantity', 'custcol_qty_prepared']
+        }).run().each(r => {
+            resultData = {
+                orderedQty: Number(r.getValue('quantity')) || 0,
+                qtyPrepared: Number(r.getValue('custcol_qty_prepared')) || 0
+            }
+            return false
+        })
+
+        return resultData
+    }
 })
-
-
-function createSOSearch(loc, ot) {
-    return search.create({
-        type: 'salesorder',
-        filters: [
-            ['mainline', 'is', 'F'],
-            'AND',
-            ['location', 'anyof', loc],
-            'AND',
-            ['ordertype', 'anyof', ot],
-            'AND',
-            ['item.type', 'anyof', ['InvtPart', 'Kit']],
-            'AND',
-            ['taxline', 'is', 'F'],
-            'AND',
-            ['status', 'anyof', [
-                'SalesOrd:D',
-                'SalesOrd:E',
-                'SalesOrd:B',
-                'SalesOrd:F'
-            ]]
-        ],
-        columns: [
-            'internalid',
-            'tranid',
-            'status',
-            'item',
-            'type',
-            'quantity',
-            'quantityuom',
-            'quantitycommitted',
-            'quantityshiprecv',
-            'custbody_release_order',
-            'custcol_release_order',
-            { name: 'lineuniquekey' },
-            'custcol_qty_prepared',
-            'custcol_prep_stage',
-            'quantitybackordered'
-        ]
-    })
-}
 
 function addStatusOptions(statusField, statusObj, excludeValues = []) {
     for (const name in statusObj) {

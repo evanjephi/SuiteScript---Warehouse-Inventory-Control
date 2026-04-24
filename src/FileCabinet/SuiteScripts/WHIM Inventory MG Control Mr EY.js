@@ -268,6 +268,79 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         log.audit({ title: 'Bin transfer created', details: `ID ${transferId}` })
     }
 
+
+    function handleStatusChange(lines) {
+        const QC_STATUS = 3
+
+        const statusChange = record.create({
+            type: record.Type.INVENTORY_STATUS_CHANGE,
+            isDynamic: true
+        })
+
+        statusChange.setValue({ fieldId: 'location', value: LOCATION })
+
+        lines.forEach(line => {
+            const item = Number(line.item)
+            const qty = Number(line.qty)
+            if (!item || qty <= 0) return
+
+            const fromStatus = Number(line.fromStatus || QC_STATUS)
+            const toStatus = Number(line.toStatus || GOOD_STATUS)
+            const bin = Number(line.bin || WHSBIN)
+
+            statusChange.selectNewLine({ sublistId: 'inventory' })
+
+            statusChange.setCurrentSublistValue({
+                sublistId: 'inventory',
+                fieldId: 'item',
+                value: item
+            })
+
+            statusChange.setCurrentSublistValue({
+                sublistId: 'inventory',
+                fieldId: 'adjustqtyby',
+                value: qty
+            })
+
+            const invDetail = statusChange.getCurrentSublistSubrecord({
+                sublistId: 'inventory',
+                fieldId: 'inventorydetail'
+            })
+
+            invDetail.selectNewLine({ sublistId: 'inventoryassignment' })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'binnumber',
+                value: bin
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'inventorystatus',
+                value: fromStatus
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'toinventorystatus',
+                value: toStatus
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'quantity',
+                value: qty
+            })
+
+            invDetail.commitLine({ sublistId: 'inventoryassignment' })
+            statusChange.commitLine({ sublistId: 'inventory' })
+        })
+
+        const statusChangeId = statusChange.save()
+        log.audit({ title: 'Inventory status change created', details: `ID ${statusChangeId}` })
+    }
+
     function handleQCRelease(soId, lines) {
         const rec = record.load({
             type: record.Type.SALES_ORDER,
