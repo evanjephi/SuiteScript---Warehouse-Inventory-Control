@@ -2,6 +2,7 @@
  * @NApiVersion 2.1
  * @NScriptType MapReduceScript
  */
+
 define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
     const WHRBIN = 301
     const WHSBIN = 302
@@ -15,12 +16,18 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         const dataStr = script.getParameter({ name: 'custscript_data' })
 
         if (!action) {
-            log.error({ title: 'Missing action', details: 'custscript_action is empty' })
+            log.error({ 
+                title: 'Missing action', 
+                details: 'custscript_action is empty' 
+            })
             return []
         }
 
         if (!dataStr) {
-            log.error({ title: 'Missing data', details: 'custscript_data is empty' })
+            log.error({ 
+                title: 'Missing data', 
+                details: 'custscript_data is empty' 
+            })
             return []
         }
 
@@ -28,12 +35,18 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         try {
             lines = JSON.parse(dataStr)
         } catch (e) {
-            log.error({ title: 'Invalid JSON in custscript_data', details: e.message || String(e) })
+            log.error({ 
+                title: 'Invalid JSON in custscript_data', 
+                details: e.message || String(e) 
+            })
             return []
         }
 
         if (!Array.isArray(lines)) {
-            log.error({ title: 'Invalid data type', details: 'custscript_data must be an array' })
+            log.error({ 
+                title: 'Invalid data type', 
+                details: 'custscript_data must be an array' 
+            })
             return []
         }
 
