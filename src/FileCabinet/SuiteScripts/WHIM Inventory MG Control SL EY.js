@@ -342,7 +342,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
                     context.response.write(JSON.stringify({
                         error: true,
-                        message: 'Submission blocked: prepared quantity cannot exceed order quantity.',
+                        message: 'Prepared quantity cannot exceed order quantity.',
                         details: overPrepared
                     }))
                     return
@@ -386,6 +386,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         salesorder_sb.addField({ id: 'so_item', type: ui.FieldType.TEXT, label: 'Item' })
         salesorder_sb.addField({ id: 'so_itemqty', type: ui.FieldType.INTEGER, label: 'Order Qty' })
         salesorder_sb.addField({ id: 'so_itemfulqty', type: ui.FieldType.INTEGER, label: 'Qty To Be Shipped' })
+        salesorder_sb.addField({ id: 'so_itemqtyneeded', type: ui.FieldType.INTEGER, label: 'Assembled Qty' })
         salesorder_sb.addField({ id: 'so_confirmqty', type: ui.FieldType.INTEGER, label: 'Confirm Shippable Qty' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
 
@@ -403,6 +404,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const qtycomm = Number(s.getValue('quantitycommitted')) || 0
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
+            const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
+
 
 
             if (!isMainRelease) return true
@@ -420,7 +423,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     item,
                     qty,
                     qtyfulf,
-                    qtycomm
+                    qtycomm,
+                    qtyPrepared
                 })
             }
 
@@ -439,6 +443,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 salesorder_sb.setSublistValue({ id: 'so_item', line: soLine, value: i.item || ' ' })
                 salesorder_sb.setSublistValue({ id: 'so_itemqty', line: soLine, value: i.qty })
                 salesorder_sb.setSublistValue({ id: 'so_itemfulqty', line: soLine, value: i.qty - i.qtyfulf })
+                salesorder_sb.setSublistValue({ id: 'so_itemqtyneeded', line: soLine, value: i.qtyPrepared })
                 salesorder_sb.setSublistValue({ id: 'so_id', line: soLine, value: tranid })
                 soLine++;
             })
@@ -463,7 +468,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         so_productqc_sb.addField({ id: 'so_qcitemqty', type: ui.FieldType.INTEGER, label: 'Order Qty' })
         so_productqc_sb.addField({ id: 'so_qcitemqtyshipped', type: ui.FieldType.INTEGER, label: 'Shipped Qty' })
         so_productqc_sb.addField({ id: 'so_qcitemqtyneeded', type: ui.FieldType.INTEGER, label: 'Assembled Qty' })
-        so_productqc_sb.addField({ id: 'so_qcconfirmqty', type: ui.FieldType.INTEGER, label: 'Confirm QC Qty' })
+        so_productqc_sb.addField({ id: 'so_qcconfirmqty', type: ui.FieldType.INTEGER, label: 'How many items to QC/Assemble' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
 
         const so_qc_ss = createSOSearch(loc, ot)
@@ -483,6 +488,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
             const prepStage = s.getValue('custcol_prep_stage') || ''
             const isPreparedStage = String(prepStage).toLowerCase() === 'prepared'
+            const type = s.getValue({ name: 'type', join: 'item' })
 
             if (!isMainRelease) return true
             if (isPreparedStage) return true
@@ -504,7 +510,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     qtycomm,
                     lineIndex: s.getValue('lineuniquekey'),
                     qtyPrepared,
-                    prepStage
+                    prepStage,
+                    type
                 })
             }
 
@@ -558,7 +565,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 'tranid',
                 'status',
                 'item',
-                'type',
                 'quantity',
                 'quantityuom',
                 'quantitycommitted',
@@ -567,7 +573,10 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 'custcol_release_order',
                 { name: 'lineuniquekey' },
                 'custcol_qty_prepared',
-                'custcol_prep_stage'
+                'custcol_prep_stage',
+                search.createColumn({
+                    name: 'type', join: 'item'
+                }),
             ]
         })
     }
