@@ -182,6 +182,11 @@ define(['N/currentRecord'], function (currentRecord) {
                     fieldId: 'so_qcitemqty',
                     line: i
                 })
+                const qtyNeeded = currRec.getSublistValue({
+                    sublistId: 'soproductqc',
+                    fieldId: 'so_qcitemqtyneeded',
+                    line: i
+                })
                 const confirmQty = currRec.getSublistValue({
                     sublistId: 'soproductqc',
                     fieldId: 'so_qcconfirmqty',
