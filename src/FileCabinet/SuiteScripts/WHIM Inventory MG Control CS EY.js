@@ -112,6 +112,16 @@ define(['N/currentRecord'], function (currentRecord) {
             })
 
             if (isSelected === true) {
+                const qtyOrder = currRec.getSublistValue({
+                    sublistId: 'sb_salesorder',
+                    fieldId: 'so_qcitemqty',
+                    line: i
+                })
+                const qtyNeeded = currRec.getSublistValue({
+                    sublistId: 'sb_salesorder',
+                    fieldId: 'so_itemqtyneeded',
+                    line: i
+                })
                 const confirmQty = currRec.getSublistValue({
                     sublistId: 'sb_salesorder',
                     fieldId: 'so_confirmqty',
@@ -139,7 +149,7 @@ define(['N/currentRecord'], function (currentRecord) {
     }
 
     function handleQCRealeaseSO() {
-        const currRec = currentRecord.get()    //get once at the top
+        const currRec = currentRecord.get()
 
         if (!hasSelectedLine(currRec, 'soproductqc', ['so_qcselect', 'so_qcconfirmqty'])) {
             alert('Please check and confirm qty for at least one Sales Order for submission.')
