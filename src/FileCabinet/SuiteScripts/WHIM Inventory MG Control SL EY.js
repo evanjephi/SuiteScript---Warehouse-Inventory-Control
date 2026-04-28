@@ -488,10 +488,12 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
             const prepStage = s.getValue('custcol_prep_stage') || ''
             const isPreparedStage = String(prepStage).toLowerCase() === 'prepared'
+            const shipmentSatisfied = qtyPrepared + qtyfulf === qty
             const type = s.getValue({ name: 'type', join: 'item' })
 
             if (!isMainRelease) return true
             if (isPreparedStage) return true
+            if (shipmentSatisfied) return true
             if (item && qtyfulf >= 0 && qtyfulf < qty) {
                 if (!isLineRelease) return true
 
