@@ -192,9 +192,12 @@ define(['N/currentRecord'], function (currentRecord) {
                     fieldId: 'so_qcconfirmqty',
                     line: i
                 })
-                const autoQty = Number(qtyOrder) - Number(qtyNeeded)
-                alert('Auto-calculated Confirm Qty: ' + autoQty + ' (Ordered Qty: ' + qtyOrder + ' - Qty Needed: ' + qtyNeeded + ')')
-                currRec.setCurrentSublistValue({ sublistId: 'soproductqc', fieldId: 'so_qcconfirmqty', value: autoQty > 0 ? autoQty : 0 })
+
+                //const autoQty = qtyOrder - qtyNeeded
+                //console.log('Auto-calculated Confirm Qty: ' + autoQty + ' (Ordered Qty: ' + qtyOrder + ' - Qty Needed: ' + qtyNeeded + ')')
+                //alert('Auto-calculated Confirm Qty: ' + autoQty + ' (Ordered Qty: ' + qtyOrder + ' - Qty Needed: ' + qtyNeeded + ')')
+                //currRec.setCurrentSublistValue({ sublistId: 'soproductqc', fieldId: 'so_qcconfirmqty', value: autoQty > 0 ? autoQty : 0 })
+
                 if (confirmQty > qtyOrder) {
                     alert('Confirm Qty cannot be greater than Ordered Qty (Line ' + (i + 1) + ')')
                     return
@@ -317,30 +320,37 @@ define(['N/currentRecord'], function (currentRecord) {
         const sublistId = context.sublistId
         const fieldId = context.fieldId
         const line = context.line
+        console.log('Field Changed - Sublist: ' + sublistId + ', Field: ' + fieldId + ', Line: ' + line)
         const currRec = context.currentRecord
 
         if (sublistId === 'sb_salesorder' && fieldId === 'so_select') {
-            const isSelected = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_select' })
-            if (isSelected === true) {
-                const qtyOrder = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqty' })
-                const qtyNeeded = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_itemqtyneeded' })
-                const autoQty = Number(qtyOrder) - Number(qtyNeeded)
-                alert('Auto-calculated Confirm Qty: ' + autoQty + ' (Ordered Qty: ' + qtyOrder + ' - Qty Needed: ' + qtyNeeded + ')')
-                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', value: autoQty > 0 ? autoQty : 0 })
-            } else {
-                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', value: '' })
-            }
+            // for (let i = 0; i < linecount; i++) {
+                // if (i !== line) {
+                //     currRec.setSublistValue({ sublistId, fieldId: 'so_select', line: i, value: false })
+                //     currRec.setSublistValue({ sublistId, fieldId: 'so_confirmqty', line: i, value: '' })
+                // }
+
+                const isSelected = currRec.getSublistValue({ sublistId, fieldId: 'so_select', line })
+                if (isSelected === true) {
+                    const qtyOrder = currRec.getSublistValue({ sublistId, fieldId: 'so_itemqty', line })
+                    const qtyNeeded = currRec.getSublistValue({ sublistId, fieldId: 'so_itemqtyneeded', line })
+                    const autoQty = Number(qtyOrder) - Number(qtyNeeded)
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty',line, value: autoQty > 0 ? autoQty : 0 })
+                } else {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', line, value: '' })
+                }
+            // }
         }
 
         if (sublistId === 'soproductqc' && fieldId === 'so_qcselect') {
-            const isSelected = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcselect' })
+            const isSelected = currRec.getSublistValue({ sublistId, fieldId: 'so_qcselect', line })
             if (isSelected === true) {
-                const qtyOrder = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqty' })
-                const qtyNeeded = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqtyneeded' })
+                const qtyOrder = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqty', line })
+                const qtyNeeded = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqtyneeded', line })
                 const autoQty = (Number(qtyOrder) || 0) - (Number(qtyNeeded) || 0)
-                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', value: autoQty > 0 ? autoQty : 0 })
+                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: autoQty > 0 ? autoQty : 0 })
             } else {
-                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', value: '' })
+                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: '' })
             }
         }
     }
@@ -415,7 +425,7 @@ define(['N/currentRecord'], function (currentRecord) {
 
     return {
         pageInit,
-        // fieldChanged,
+        fieldChanged,
         saveRecord,
         handleRcvItems,
         handleQcItems
