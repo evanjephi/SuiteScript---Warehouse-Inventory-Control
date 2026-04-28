@@ -49,14 +49,9 @@ define(['N/currentRecord'], function (currentRecord) {
             if (!table) return
             if (fn === handleReleaseSO || fn === handleQCRealeaseSO) {
                 table.querySelectorAll('tr[id^="' + sublistId + 'row"]').forEach(function (row) {
-                    // get the hidden so_id value from this row
                     const soId = row.querySelector('[id^="so_id"]')
                     const soIdVal = soId ? soId.value.toLowerCase() : ''
-
-                    // get visible text of the row
                     const text = row.textContent.toLowerCase()
-
-                    // match against SO # or item name
                     row.style.display = (text.includes(searchVal) || soIdVal.includes(searchVal)) ? '' : 'none'
                 })
             } else table.querySelectorAll('tr[id^="' + sublistId + 'row"]').forEach(function (row) {
@@ -71,14 +66,9 @@ define(['N/currentRecord'], function (currentRecord) {
             if (!layer) return
 
             layer.querySelectorAll('tr[id^="' + sublistId + 'row"]').forEach(function (row) {
-                // get the hidden so_id value from this row
                 const soId = row.querySelector('[id^="so_id"]')
                 const soIdVal = soId ? soId.value.toLowerCase() : ''
-
-                // get visible text of the row
                 const text = row.textContent.toLowerCase()
-
-                // match against SO # or item name
                 row.style.display = (text.includes(searchVal) || soIdVal.includes(searchVal)) ? '' : 'none'
             })
         }
@@ -104,7 +94,7 @@ define(['N/currentRecord'], function (currentRecord) {
     }
 
     function handleReleaseSO() {
-        const currRec = currentRecord.get()    // ← get once at the top
+        const currRec = currentRecord.get()    // get once at the top
 
         if (!hasSelectedLine(currRec, 'sb_salesorder', ['so_select', 'so_confirmqty'])) {
             alert('Please check and confirm qty for at least one Sales Order for submission.')
@@ -244,7 +234,6 @@ define(['N/currentRecord'], function (currentRecord) {
             }
         }
 
-        // send to suitelet via fetch
         fetch(window.location.href, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -269,7 +258,6 @@ define(['N/currentRecord'], function (currentRecord) {
             return
         }
 
-        // collect selected lines data
         const lines = []
         const lineCount = currRec.getLineCount({ sublistId: 'productqc' })
 
@@ -296,7 +284,6 @@ define(['N/currentRecord'], function (currentRecord) {
             }
         }
 
-        // send to suitelet via fetch
         fetch(window.location.href, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
