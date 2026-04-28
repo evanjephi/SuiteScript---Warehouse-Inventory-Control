@@ -310,6 +310,37 @@ define(['N/currentRecord'], function (currentRecord) {
             })
     }
 
+    function fieldChanged(context) {
+        const sublistId = context.sublistId
+        const fieldId = context.fieldId
+        const line = context.line
+        const currRec = context.currentRecord
+
+        if (sublistId === 'sb_salesorder' && fieldId === 'so_select') {
+            const isSelected = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_select' })
+            if (isSelected === true) {
+                const qtyOrder = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqty' })
+                const qtyNeeded = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_itemqtyneeded' })
+                const autoQty = (Number(qtyOrder) || 0) - (Number(qtyNeeded) || 0)
+                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', value: autoQty > 0 ? autoQty : 0 })
+            } else {
+                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', value: '' })
+            }
+        }
+
+        if (sublistId === 'soproductqc' && fieldId === 'so_qcselect') {
+            const isSelected = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcselect' })
+            if (isSelected === true) {
+                const qtyOrder = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqty' })
+                const qtyNeeded = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqtyneeded' })
+                const autoQty = (Number(qtyOrder) || 0) - (Number(qtyNeeded) || 0)
+                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', value: autoQty > 0 ? autoQty : 0 })
+            } else {
+                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', value: '' })
+            }
+        }
+    }
+
     function saveRecord(context) {
         const currRec = context.currentRecord
         const lineCount = currRec.getLineCount({ sublistId: 'warehousereceiving' })
@@ -380,6 +411,7 @@ define(['N/currentRecord'], function (currentRecord) {
 
     return {
         pageInit,
+        fieldChanged,
         saveRecord,
         handleRcvItems,
         handleQcItems
