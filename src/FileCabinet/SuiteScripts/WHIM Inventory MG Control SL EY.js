@@ -378,8 +378,11 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             type: ui.SublistType.LIST,
             label: 'Release for Shipment'
         })
-        salesorder_sb.addField({ id: 'so_id', type: ui.FieldType.TEXT, label: 'SO ID' })
-
+        salesorder_sb.addField({ id: 'so_tranidref', type: ui.FieldType.TEXT, label: 'Ref.' })
+        salesorder_sb.addField({ id: 'so_id', type: ui.FieldType.INTEGER, label: 'SO ID' })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
+        salesorder_sb.addField({ id: 'so_lineindex', type: ui.FieldType.INTEGER, label: 'Line Index' })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
         salesorder_sb.addField({ id: 'so_select', type: ui.FieldType.CHECKBOX, label: 'Select' })
         salesorder_sb.addField({ id: 'so_tranid', type: ui.FieldType.TEXT, label: 'SO #' })
         salesorder_sb.addField({ id: 'so_status', type: ui.FieldType.TEXT, label: 'Status' })
@@ -480,9 +483,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const tranid = s.getValue('tranid')
             const status = s.getText('status')
             const item = s.getText('item')
-            const qty = Number(s.getValue('quantity')) || 0
-            const qtyfulf = Number(s.getValue('quantityshiprecv')) || 0
-            const qtycomm = Number(s.getValue('quantitycommitted')) || 0
+            const qty = Number(s.getValue('quantity')) 
+            const qtyfulf = Number(s.getValue('quantityshiprecv')) 
+            const qtycomm = Number(s.getValue('quantitycommitted')) 
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
             const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0

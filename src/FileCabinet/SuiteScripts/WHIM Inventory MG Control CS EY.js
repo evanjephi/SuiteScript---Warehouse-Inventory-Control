@@ -359,11 +359,11 @@ define(['N/currentRecord'], function (currentRecord) {
                 const qtyShipped = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqtyshipped', line })
                 if (qtyNeeded === 0) {
                     currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder })
-                } else if (qtyNeeded > 0 && (qtyNeeded + qtyShipped < qtyOrder)) {
-                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyNeeded })
                 } else if (qtyNeeded > 0 && qtyShipped === 0) {
                     currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder-qtyNeeded })
-                }
+                } else if (qtyNeeded > 0 && (qtyNeeded + qtyShipped < qtyOrder)) {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyNeeded })
+                } 
             } else {
                 currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: '' })
             }
