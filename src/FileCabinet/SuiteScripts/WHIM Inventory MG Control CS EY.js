@@ -192,6 +192,9 @@ define(['N/currentRecord'], function (currentRecord) {
                     fieldId: 'so_qcconfirmqty',
                     line: i
                 })
+                const autoQty = Number(qtyOrder) - Number(qtyNeeded)
+                alert('Auto-calculated Confirm Qty: ' + autoQty + ' (Ordered Qty: ' + qtyOrder + ' - Qty Needed: ' + qtyNeeded + ')')
+                currRec.setCurrentSublistValue({ sublistId: 'soproductqc', fieldId: 'so_qcconfirmqty', value: autoQty > 0 ? autoQty : 0 })
                 if (confirmQty > qtyOrder) {
                     alert('Confirm Qty cannot be greater than Ordered Qty (Line ' + (i + 1) + ')')
                     return
@@ -321,7 +324,8 @@ define(['N/currentRecord'], function (currentRecord) {
             if (isSelected === true) {
                 const qtyOrder = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_qcitemqty' })
                 const qtyNeeded = currRec.getCurrentSublistValue({ sublistId, fieldId: 'so_itemqtyneeded' })
-                const autoQty = (Number(qtyOrder) || 0) - (Number(qtyNeeded) || 0)
+                const autoQty = Number(qtyOrder) - Number(qtyNeeded)
+                alert('Auto-calculated Confirm Qty: ' + autoQty + ' (Ordered Qty: ' + qtyOrder + ' - Qty Needed: ' + qtyNeeded + ')')
                 currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', value: autoQty > 0 ? autoQty : 0 })
             } else {
                 currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', value: '' })
@@ -411,7 +415,7 @@ define(['N/currentRecord'], function (currentRecord) {
 
     return {
         pageInit,
-        fieldChanged,
+        // fieldChanged,
         saveRecord,
         handleRcvItems,
         handleQcItems
