@@ -342,7 +342,7 @@ define(['N/currentRecord'], function (currentRecord) {
                     alert('Assembled qty cannot be greater than the ordered qty: ' + ' (Ordered Qty: ' + qtyOrder + ' Shipped Qty: ' + shippedQty + ')')
                     currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', line, value: '' })
                     return
-                } else if (shippedQty + qtyNeeded < qtyOrder) {
+                } else if (shippedQty + qtyNeeded <= qtyOrder) {
                     currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_confirmqty', line, value: qtyNeeded })
                 }
             } else {
@@ -356,9 +356,12 @@ define(['N/currentRecord'], function (currentRecord) {
             if (isSelected === true) {
                 const qtyOrder = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqty', line })
                 const qtyNeeded = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqtyneeded', line })
-
-                const autoQty = qtyOrder - qtyNeeded
-                currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: autoQty > 0 ? autoQty : 0 })
+                const qtyShipped = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqtyshipped', line })
+                if (qtyNeeded === 0) {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder })
+                } else if (qtyNeeded > 0 && qtyNeeded + qtyShipped <= qtyOrder) {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyNeeded })
+                }
             } else {
                 currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: '' })
             }
