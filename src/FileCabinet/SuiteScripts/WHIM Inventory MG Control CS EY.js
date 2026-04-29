@@ -94,7 +94,7 @@ define(['N/currentRecord'], function (currentRecord) {
     }
 
     function handleReleaseSO() {
-        const currRec = currentRecord.get() 
+        const currRec = currentRecord.get()
 
         if (!hasSelectedLine(currRec, 'sb_salesorder', ['so_select', 'so_confirmqty'])) {
             alert('Please check and confirm qty for at least one Sales Order for submission.')
@@ -357,14 +357,14 @@ define(['N/currentRecord'], function (currentRecord) {
                 const qtyOrder = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqty', line })
                 const qtyNeeded = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqtyneeded', line })
                 const qtyShipped = currRec.getSublistValue({ sublistId, fieldId: 'so_qcitemqtyshipped', line })
-                if (qtyNeeded === 0) {
-                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder })
+                if (qtyNeeded === 0 && qtyShipped > 0) {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder - qtyShipped });
+                } else if (qtyNeeded === 0) {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder });
                 } else if (qtyNeeded > 0 && qtyShipped === 0) {
-                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder-qtyNeeded })
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder - qtyNeeded });
                 } else if (qtyNeeded > 0 && (qtyNeeded + qtyShipped < qtyOrder)) {
-                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyNeeded })
-                } else if ( qtyNeeded == 0 && qtyShipped > 0) {
-                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder-qtyShipped })
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyNeeded });
                 }
             } else {
                 currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: '' })
