@@ -94,7 +94,7 @@ define(['N/currentRecord'], function (currentRecord) {
     }
 
     function handleReleaseSO() {
-        const currRec = currentRecord.get()    // get once at the top
+        const currRec = currentRecord.get() 
 
         if (!hasSelectedLine(currRec, 'sb_salesorder', ['so_select', 'so_confirmqty'])) {
             alert('Please check and confirm qty for at least one Sales Order for submission.')
@@ -363,7 +363,9 @@ define(['N/currentRecord'], function (currentRecord) {
                     currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder-qtyNeeded })
                 } else if (qtyNeeded > 0 && (qtyNeeded + qtyShipped < qtyOrder)) {
                     currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyNeeded })
-                } 
+                } else if ( qtyNeeded == 0 && qtyShipped > 0) {
+                    currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: qtyOrder-qtyShipped })
+                }
             } else {
                 currRec.setCurrentSublistValue({ sublistId, fieldId: 'so_qcconfirmqty', line, value: '' })
             }

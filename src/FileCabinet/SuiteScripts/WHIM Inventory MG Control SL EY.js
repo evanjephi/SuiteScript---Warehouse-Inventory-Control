@@ -476,7 +476,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
         const so_qc_ss = createSOSearch(loc, ot)
 
-
         const soContent = {}
         so_qc_ss.run().each(s => {
             const soid = Number(s.getValue('internalid'))
