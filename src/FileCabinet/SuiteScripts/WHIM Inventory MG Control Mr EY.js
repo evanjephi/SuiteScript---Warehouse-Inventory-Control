@@ -8,6 +8,7 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
     const WHSBIN = 302
     const HOLD_STATUS = 4
     const GOOD_STATUS = 1
+    const QC_STATUS = 3
     const LOCATION = 1
 
     function getInputData() {
@@ -58,15 +59,48 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         const action = line.action
 
         if (action === 'soQCRelease') {
-            if (!line.soId && line.soId !== 0) return
+            const soId = Number(line.soId)
+            const confirmQty = Number(line.confirmQty) || 0
+            const item = Number(line.item) || 0
+
+            if (!soId || confirmQty <= 0 || line.lineIndex === null || line.lineIndex === undefined || line.lineIndex === '') {
+                log.error({
+                    title: 'Invalid soQCRelease map payload',
+                    details: JSON.stringify(line)
+                })
+                return
+            }
+
             log.debug({
                 title: 'Map SO-QC-Release',
-                details: `SO ID ${line.soId} Line  ${JSON.stringify(line)} with action ${action}`
+                details: `SO ID ${soId} Line ${JSON.stringify(line)} with action ${action}`
             })
+
             context.write({
-                key: String(line.soId),
-                value: JSON.stringify(line)
+                key: `so|${soId}`,
+                value: JSON.stringify({ ...line, soId, confirmQty })
             })
+
+            if (item > 0) {
+                context.write({
+                    key: `bin|soQCRelease|${WHRBIN}|${WHSBIN}|${HOLD_STATUS}|${QC_STATUS}`,
+                    value: JSON.stringify({
+                        action: 'soQCReleaseBin',
+                        soId,
+                        item,
+                        qty: confirmQty,
+                        fromBin: WHRBIN,
+                        toBin: WHSBIN,
+                        fromStatus: HOLD_STATUS,
+                        toStatus: QC_STATUS
+                    })
+                })
+            } else {
+                log.error({
+                    title: 'Missing item for consolidated bin transfer',
+                    details: JSON.stringify({ soId, lineIndex: line.lineIndex, item: line.item, confirmQty })
+                })
+            }
             return
         }
 
@@ -104,14 +138,14 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         if (!lines.length) return
 
         const action = lines[0].action
+        const key = String(context.key)
 
         try {
-            if (action === 'soQCRelease') {
-                // log.debug({
-                //     title: 'Reduce soQCRelease',
-                //     details: `SO ID ${context.key} with ${JSON.stringify(lines)}`
-                // })
-                handleQCRelease(context.key, lines)
+            if (key.indexOf('so|') === 0 || action === 'soQCRelease') {
+                const soId = key.indexOf('so|') === 0 ? Number(key.split('|')[1]) : Number(context.key)
+                handleQCRelease(soId, lines)
+            } else if (key.indexOf('bin|') === 0 || action === 'soQCReleaseBin') {
+                handleConsolidatedBinTransfer(lines)
             } else if (action === 'releasing') {
                 handleBinTransfer(lines)
             } else {
@@ -124,7 +158,7 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
             log.audit({
                 title: 'Reduce complete',
-                details: `${action} key ${context.key} lines ${lines.length}`
+                details: `${action} key ${key} lines ${lines.length}`
             })
         } catch (e) {
             log.error({
@@ -342,12 +376,19 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
     }
 
     function handleQCRelease(soId, lines) {
+        if (!soId) {
+            log.error({ title: 'Invalid SO id in handleQCRelease', details: soId })
+            return
+        }
+
         const rec = record.load({
             type: record.Type.SALES_ORDER,
             id: soId
         })
 
         const lineKeyToIndex = buildLineKeyToIndexMap(rec)
+        const selectedQtyByLineKey = {}
+        let hasSoChanges = false
 
         lines.forEach(({ lineIndex, confirmQty }) => {
             const lineUniqueKey = String(lineIndex)
@@ -361,7 +402,7 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
                 })
                 return
             }
-            log.debug({ title: 'QC line index', details: index, lineKeyToIndex, lineUniqueKey })
+
             const orderedQty = Number(rec.getSublistValue({
                 sublistId: 'item',
                 fieldId: 'quantity',
@@ -374,17 +415,38 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
                 line: index
             })) || 0
 
-            const newPreparedQty = alreadyPrepared + qtyToAdd
+            const ro = rec.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'custcol_release_order',
+                line: index
+            })
+
+            if (ro === false) return
+
+            const remainingToPrepare = Math.max(orderedQty - alreadyPrepared, 0)
+            const appliedQty = Math.min(qtyToAdd, remainingToPrepare)
+            if (appliedQty <= 0) return
+
+            const finalPreparedQty = alreadyPrepared + appliedQty
 
             let stage = 'pending'
-            if (newPreparedQty > 0 && newPreparedQty < orderedQty) stage = 'partial'
-            if (orderedQty > 0 && newPreparedQty >= orderedQty) stage = 'prepared'
+            if (finalPreparedQty > 0 && finalPreparedQty < orderedQty) stage = 'partial'
+            if (orderedQty > 0 && finalPreparedQty >= orderedQty) stage = 'prepared'
+
+            selectedQtyByLineKey[lineUniqueKey] = (selectedQtyByLineKey[lineUniqueKey] || 0) + appliedQty
+
+            rec.setSublistValue({
+                sublistId: 'item',
+                fieldId: 'commitinventory',
+                value: 1,
+                line: index
+            })
 
             rec.setSublistValue({
                 sublistId: 'item',
                 fieldId: 'custcol_qty_prepared',
                 line: index,
-                value: newPreparedQty
+                value: finalPreparedQty
             })
 
             rec.setSublistValue({
@@ -396,11 +458,143 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
             log.debug({
                 title: 'QC line updated',
-                details: `[SO ${soId} key ${lineUniqueKey} idx ${index} ordered ${orderedQty} newPrepared ${newPreparedQty} stage ${stage}]`
+                details: `[SO ${soId} key ${lineUniqueKey} idx ${index} ordered ${orderedQty} applied ${appliedQty} newPrepared ${finalPreparedQty} stage ${stage}]`
             })
+
+            hasSoChanges = true
         })
 
-       rec.save()
+        if (hasSoChanges) {
+            rec.save()
+        }
+
+        createPackedFulfillment(soId, selectedQtyByLineKey)
+    }
+
+    function createPackedFulfillment(soId, selectedQtyByLineKey) {
+        const selectedLineKeys = Object.keys(selectedQtyByLineKey)
+        if (!selectedLineKeys.length) {
+            log.audit({
+                title: 'No selected lines for fulfillment',
+                details: `SO ${soId}`
+            })
+            return
+        }
+
+        const fulfillment = record.transform({
+            fromType: record.Type.SALES_ORDER,
+            fromId: soId,
+            toType: record.Type.ITEM_FULFILLMENT,
+            isDynamic: false
+        })
+
+        fulfillment.setValue({ fieldId: 'shipstatus', value: 'B' })
+        fulfillment.setValue({ fieldId: 'custbody_viso_shipping_carrier', value: 1 })
+        fulfillment.setValue({ fieldId: 'custbody_tracking_number', value: 'TBD' })
+        const today = new Date()
+        fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today }) // to be revised
+        fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
+        const lineKeyToIndex = buildLineKeyToIndexMap(fulfillment)
+        let hasFulfillmentLines = false
+
+        selectedLineKeys.forEach(lineKey => {
+            const index = lineKeyToIndex[String(lineKey)]
+            const requestedQty = Number(selectedQtyByLineKey[lineKey]) || 0
+            if (index === undefined || requestedQty <= 0) return
+
+            const defaultQty = Number(fulfillment.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'quantity',
+                line: index
+            })) || 0
+
+            const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
+            if (fulfillQty <= 0) return
+
+            fulfillment.setSublistValue({
+                sublistId: 'item',
+                fieldId: 'itemreceive',
+                line: index,
+                value: true
+            })
+
+            fulfillment.setSublistValue({
+                sublistId: 'item',
+                fieldId: 'quantity',
+                line: index,
+                value: fulfillQty
+            })
+            
+            hasFulfillmentLines = true
+        })
+
+        const lineCount = fulfillment.getLineCount({ sublistId: 'item' }) || 0
+        for (let i = 0; i < lineCount; i++) {
+            const lineKey = String(fulfillment.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'lineuniquekey',
+                line: i
+            }) || '')
+
+            if (!selectedQtyByLineKey[lineKey]) {
+                fulfillment.setSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'itemreceive',
+                    line: i,
+                    value: false
+                })
+            }
+        }
+
+        if (!hasFulfillmentLines) {
+            log.audit({
+                title: 'No valid fulfillment quantities',
+                details: `SO ${soId}`
+            })
+            return
+        }
+
+        const fulfillmentId = fulfillment.save()
+        log.audit({
+            title: 'Packed fulfillment created',
+            details: `SO ${soId} IF ${fulfillmentId}`
+        })
+    }
+
+    function handleConsolidatedBinTransfer(lines) {
+        if (!lines.length) return
+
+        const aggregated = {}
+
+        lines.forEach(line => {
+            const item = Number(line.item)
+            const qty = Number(line.qty) || 0
+            const fromBin = Number(line.fromBin || WHRBIN)
+            const toBin = Number(line.toBin || WHSBIN)
+            const fromStatus = Number(line.fromStatus || HOLD_STATUS)
+            const toStatus = Number(line.toStatus || QC_STATUS)
+
+            if (!item || qty <= 0) return
+
+            const key = [item, fromBin, toBin, fromStatus, toStatus].join('|')
+            if (!aggregated[key]) {
+                aggregated[key] = {
+                    item,
+                    qty: 0,
+                    fromBin,
+                    toBin,
+                    fromStatus,
+                    toStatus
+                }
+            }
+
+            aggregated[key].qty += qty
+        })
+
+        const transferLines = Object.keys(aggregated).map(key => aggregated[key])
+        if (!transferLines.length) return
+
+        handleBinTransfer(transferLines)
     }
 
     function buildLineKeyToIndexMap(rec) {
@@ -421,7 +615,6 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
         return map
     }
-
 
     function summarize(summary) {
         summary.mapSummary.errors.iterator().each((key, error) => {
