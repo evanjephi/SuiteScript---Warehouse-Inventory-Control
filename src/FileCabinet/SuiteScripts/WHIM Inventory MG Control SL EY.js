@@ -468,6 +468,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         so_productqc_sb.addField({ id: 'so_qctranid', type: ui.FieldType.TEXT, label: 'SO #' })
         so_productqc_sb.addField({ id: 'so_qcstatus', type: ui.FieldType.TEXT, label: 'Status' })
         so_productqc_sb.addField({ id: 'so_qcitem', type: ui.FieldType.TEXT, label: 'Item' })
+        so_productqc_sb.addField({ id: 'so_qcitemid', type: ui.FieldType.INTEGER, label: 'Item ID' })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
         so_productqc_sb.addField({ id: 'so_qcitemqty', type: ui.FieldType.INTEGER, label: 'Order Qty' })
         so_productqc_sb.addField({ id: 'so_qcitemqtyshipped', type: ui.FieldType.INTEGER, label: 'Shipped Qty' })
         so_productqc_sb.addField({ id: 'so_qcitemqtyneeded', type: ui.FieldType.INTEGER, label: 'Assembled Qty' })
@@ -482,6 +484,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const tranid = s.getValue('tranid')
             const status = s.getText('status')
             const item = s.getText('item')
+            const itemId = Number(s.getValue('item')) || 0
             const qty = Number(s.getValue('quantity')) 
             const qtyfulf = Number(s.getValue('quantityshiprecv')) 
             const qtycomm = Number(s.getValue('quantitycommitted')) 
@@ -509,6 +512,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
                 soContent[tranid].items.push({
                     item,
+                    itemId,
                     qty,
                     qtyfulf,
                     qtycomm,
@@ -533,6 +537,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 so_productqc_sb.setSublistValue({ id: 'so_qcstatus', line: soLine, value: index === 0 ? so.status : ' ' })
 
                 so_productqc_sb.setSublistValue({ id: 'so_qcitem', line: soLine, value: i.item || ' ' })
+                if (i.itemId) {
+                    so_productqc_sb.setSublistValue({ id: 'so_qcitemid', line: soLine, value: i.itemId })
+                }
                 so_productqc_sb.setSublistValue({ id: 'so_qcitemqty', line: soLine, value: i.qty })
                 so_productqc_sb.setSublistValue({ id: 'so_qcitemqtyshipped', line: soLine, value: i.qtyfulf })
                 so_productqc_sb.setSublistValue({ id: 'so_qcitemqtyneeded', line: soLine, value: i.qtyPrepared })
