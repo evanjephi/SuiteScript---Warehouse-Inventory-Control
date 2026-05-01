@@ -3,7 +3,7 @@
  * @NScriptType MapReduceScript
  */
 
-define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
+define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, search) => {
     const WHRBIN = 301
     const WHSBIN = 302
     const HOLD_STATUS = 4
@@ -80,27 +80,6 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
                 key: `so|${soId}`,
                 value: JSON.stringify({ ...line, soId, confirmQty })
             })
-
-            if (item > 0) {
-                context.write({
-                    key: `bin|soQCRelease|${WHRBIN}|${WHSBIN}|${HOLD_STATUS}|${QC_STATUS}`,
-                    value: JSON.stringify({
-                        action: 'soQCReleaseBin',
-                        soId,
-                        item,
-                        qty: confirmQty,
-                        fromBin: WHRBIN,
-                        toBin: WHSBIN,
-                        fromStatus: HOLD_STATUS,
-                        toStatus: QC_STATUS
-                    })
-                })
-            } else {
-                log.error({
-                    title: 'Missing item for consolidated bin transfer',
-                    details: JSON.stringify({ soId, lineIndex: line.lineIndex, item: line.item, confirmQty })
-                })
-            }
             return
         }
 
@@ -144,8 +123,6 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
             if (key.indexOf('so|') === 0 || action === 'soQCRelease') {
                 const soId = key.indexOf('so|') === 0 ? Number(key.split('|')[1]) : Number(context.key)
                 handleQCRelease(soId, lines)
-            } else if (key.indexOf('bin|') === 0 || action === 'soQCReleaseBin') {
-                handleConsolidatedBinTransfer(lines)
             } else if (action === 'releasing') {
                 handleBinTransfer(lines)
             } else {
@@ -168,61 +145,6 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
             throw e
         }
     }
-
-    /*     function handleQCRelease(soId, lines) {
-            const rec = record.load({
-                type: record.Type.SALES_ORDER,
-                id: soId
-            })
-    
-            lines.forEach(({ lineIndex, confirmQty }) => {
-                const index = Number(lineIndex)
-                const qtyToAdd = Number(confirmQty) || 0
-                if (Number.isNaN(index) || qtyToAdd <= 0) return
-    
-                const orderedQty = Number(rec.getSublistValue({
-                    sublistId: 'item',
-                    fieldId: 'quantity',
-                    line: index
-                }))
-    
-                const alreadyPrepared = Number(rec.getSublistValue({
-                    sublistId: 'item',
-                    fieldId: 'custcol_qty_prepared',
-                    line: index
-                })) || 0
-    
-                const newPreparedQty = alreadyPrepared + qtyToAdd
-    
-                let stage = 'pending'
-                if (newPreparedQty > 0 && newPreparedQty < orderedQty) {
-                    stage = 'partial'
-                } else if (newPreparedQty >= orderedQty && orderedQty > 0) {
-                    stage = 'prepared'
-                }
-    
-                log.debug({
-                    title: 'Processing QC release line',
-                    details: `Line ${index} ordered ${orderedQty} already prepared ${alreadyPrepared} adding ${qtyToAdd} | newPreparedQty ${newPreparedQty}stage ${stage}`
-                })
-    
-                // rec.setSublistValue({
-                //     sublistId: 'item',
-                //     fieldId: 'custcol_qty_prepared',
-                //     line: index,
-                //     value: newPreparedQty
-                // })
-    
-                // rec.setSublistValue({
-                //     sublistId: 'item',
-                //     fieldId: 'custcol_prep_stage',
-                //     line: index,
-                //     value: stage
-                // })
-            })
-    
-            //   rec.save()
-        } */
 
     function handleBinTransfer(lines) {
         const transfer = record.create({
@@ -376,6 +298,32 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
     }
 
     function handleQCRelease(soId, lines) {
+        
+
+        // Step 1 bin transfer first (WHRBIN Hold > WHSBIN QC), expanding kits to components
+        try {
+            const binLines = buildBinTransferLines(lines)
+            if (binLines.length > 0) {
+                handleBinTransfer(binLines)
+            } else {
+                log.audit({ title: 'No bin transfer lines', details: `SO ${soId} - all items may be non-inventory` })
+            }
+        } catch (e) {
+            log.error({
+                title: `Bin transfer failed for SO ${soId} - fulfillment will NOT be created`,
+                details: e.message || String(e)
+            })
+            return
+        }
+
+        //step 2 update SO line stages and prepared qtys, and create fulfillment with prepared qtys
+         const selectedQtyByLineKey = buildItemStages(soId, lines)
+
+        // Step 3 fulfillment only after bin transfer succeeds
+        createPackedFulfillment(soId, selectedQtyByLineKey)
+    }
+
+    function buildItemStages(soId, lines) {
         if (!soId) {
             log.error({ title: 'Invalid SO id in handleQCRelease', details: soId })
             return
@@ -466,9 +414,91 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
 
         if (hasSoChanges) {
             rec.save()
+            log.audit({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
         }
 
-        createPackedFulfillment(soId, selectedQtyByLineKey)
+        return selectedQtyByLineKey
+    }
+
+    function buildBinTransferLines(lines) {
+        const aggregated = {}
+
+        lines.forEach(({ item, itemType, confirmQty }) => {
+            const itemId = Number(item) || 0
+            const qty = Number(confirmQty) || 0
+            if (!itemId || qty <= 0) return
+
+            const isKit = String(itemType || '').toLowerCase() === 'kit'
+
+            let components = []
+            if (isKit) {
+                components = getKitComponents(itemId, qty)
+                if (!components.length) {
+                    log.error({
+                        title: 'Kit has no inventory components',
+                        details: `Kit item ${itemId} qty ${qty}`
+                    })
+                }
+            } else {
+                components = [{ item: itemId, qty }]
+            }
+
+            components.forEach(({ item: compId, qty: compQty }) => {
+                const key = [compId, WHRBIN, WHSBIN, HOLD_STATUS, QC_STATUS].join('|')
+                if (!aggregated[key]) {
+                    aggregated[key] = { item: compId, qty: 0, fromBin: WHRBIN, toBin: WHSBIN, fromStatus: HOLD_STATUS, toStatus: QC_STATUS }
+                }
+                aggregated[key].qty += compQty
+            })
+        })
+
+        return Object.values(aggregated).filter(l => l.item && l.qty > 0)
+    }
+
+    function getKitComponents(kitItemId, kitQty) {
+        const components = []
+        try {
+            search.create({
+                type: 'item',
+                filters: [
+                    ['internalid', 'anyof', kitItemId],
+                    'AND',
+                    ['type', 'anyof', 'Kit'],
+                ],
+                columns: ['internalid', 'memberquantity',
+                    search.createColumn({
+                        name: 'internalid',
+                        join: 'memberitem'
+                    }),
+                    search.createColumn({
+                        name: 'type',
+                        join: 'memberitem'
+                    }),
+                    search.createColumn({ name: 'memberitem' })
+                ]
+            }).run().each(r => {
+                const memberId = Number(r.getValue({
+                    name: 'internalid',
+                    join: 'memberitem'
+                }))
+                const memberQty = Number(r.getValue('memberquantity'))
+                const memberType = r.getValue({ name: 'type', join: 'memberitem' })
+                if (memberId > 0) {
+                    components.push({ item: memberId, qty: memberQty * kitQty, memberType })
+                }
+                return true
+            })
+            log.debug({
+                title: 'Kit components resolved',
+                details: `Kit ${kitItemId} x${kitQty}: ${JSON.stringify(components)}`
+            })
+        } catch (e) {
+            log.error({
+                title: `Failed to resolve kit components for item ${kitItemId}`,
+                details: e.message || String(e)
+            })
+        }
+        return components
     }
 
     function createPackedFulfillment(soId, selectedQtyByLineKey) {
@@ -524,7 +554,7 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
                 line: index,
                 value: fulfillQty
             })
-            
+
             hasFulfillmentLines = true
         })
 
