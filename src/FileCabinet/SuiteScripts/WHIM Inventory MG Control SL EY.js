@@ -479,7 +479,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         so_productqc_sb.addField({ id: 'so_qcconfirmqty', type: ui.FieldType.INTEGER, label: 'How many items to QC/Assemble' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
         so_productqc_sb.addField({ id: 'so_qctype', type: ui.FieldType.TEXT, label: 'Item Type' })
-           .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
 
         const so_qc_ss = createSOSearch(loc, ot)
 
@@ -529,7 +529,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             }
             return true
         })
-
         log.debug('soContent', soContent)
         let soLine = 0
         for (const tranid in soContent) {
@@ -550,9 +549,60 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 so_productqc_sb.setSublistValue({ id: 'so_qctranidref', line: soLine, value: tranid })
                 so_productqc_sb.setSublistValue({ id: 'so_qcid', line: soLine, value: so.id })
                 so_productqc_sb.setSublistValue({ id: 'so_qctype', line: soLine, value: i.type })
+
+                if (i.type === 'Kit') {
+                     getKitComponents(i.itemId, i.qty)
+                }
                 soLine++;
             })
         }
+    }
+
+
+    function getKitComponents(kitItemId, kitQty) {
+        const components = []
+        try {
+            search.create({
+                type: 'item',
+                filters: [
+                    ['internalid', 'anyof', kitItemId],
+                    'AND',
+                    ['type', 'anyof', 'Kit'],
+                ],
+                columns: ['internalid', 'memberquantity',
+                    search.createColumn({
+                        name: 'internalid',
+                        join: 'memberitem'
+                    }),
+                    search.createColumn({
+                        name: 'type',
+                        join: 'memberitem'
+                    }),
+                    search.createColumn({ name: 'memberitem' })
+                ]
+            }).run().each(r => {
+                const memberId = Number(r.getValue({
+                    name: 'internalid',
+                    join: 'memberitem'
+                }))
+                const memberQty = Number(r.getValue('memberquantity'))
+                const memberType = r.getValue({ name: 'type', join: 'memberitem' })
+                if (memberId > 0) {
+                    components.push({ item: memberId, qty: memberQty * kitQty, memberType })
+                }
+                return true
+            })
+            log.debug({
+                title: 'Kit components resolved',
+                details: `Kit ${kitItemId} x${kitQty}: ${JSON.stringify(components)}`
+            })
+        } catch (e) {
+            log.error({
+                title: `Failed to resolve kit components for item ${kitItemId}`,
+                details: e.message || String(e)
+            })
+        }
+        return components
     }
 
     function createSOSearch(loc, ot) {
