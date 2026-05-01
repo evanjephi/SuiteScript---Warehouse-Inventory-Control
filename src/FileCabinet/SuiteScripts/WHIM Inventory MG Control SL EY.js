@@ -397,6 +397,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
         const soContent = {}
         so_ss.run().each(s => {
+            const soid = Number(s.getValue('internalid'))
             const tranid = s.getValue('tranid')
             const status = s.getText('status')
             const item = s.getText('item')
@@ -417,6 +418,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 if (!isLineRelease) return true
                 if (!soContent[tranid]) {
                     soContent[tranid] = {
+                        id: soid,
                         status: status,
                         items: []
                     }
@@ -447,7 +449,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 salesorder_sb.setSublistValue({ id: 'so_itemqty', line: soLine, value: i.qty })
                 salesorder_sb.setSublistValue({ id: 'so_itemfulqty', line: soLine, value: i.qty - i.qtyfulf })
                 salesorder_sb.setSublistValue({ id: 'so_itemqtyneeded', line: soLine, value: i.qtyPrepared })
-                salesorder_sb.setSublistValue({ id: 'so_id', line: soLine, value: tranid })
+                salesorder_sb.setSublistValue({ id: 'so_tranidref', line: soLine, value: tranid })
+                salesorder_sb.setSublistValue({ id: 'so_id', line: soLine, value: so.id })
                 soLine++;
             })
         }
@@ -475,6 +478,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
         so_productqc_sb.addField({ id: 'so_qcitemqtyneeded', type: ui.FieldType.INTEGER, label: 'Assembled Qty' })
         so_productqc_sb.addField({ id: 'so_qcconfirmqty', type: ui.FieldType.INTEGER, label: 'How many items to QC/Assemble' })
             .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
+        so_productqc_sb.addField({ id: 'so_qctype', type: ui.FieldType.TEXT, label: 'Item Type' })
+           .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
 
         const so_qc_ss = createSOSearch(loc, ot)
 
@@ -485,9 +490,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             const status = s.getText('status')
             const item = s.getText('item')
             const itemId = Number(s.getValue('item')) || 0
-            const qty = Number(s.getValue('quantity')) 
-            const qtyfulf = Number(s.getValue('quantityshiprecv')) 
-            const qtycomm = Number(s.getValue('quantitycommitted')) 
+            const qty = Number(s.getValue('quantity'))
+            const qtyfulf = Number(s.getValue('quantityshiprecv'))
+            const qtycomm = Number(s.getValue('quantitycommitted'))
             const isMainRelease = s.getValue('custbody_release_order')
             const isLineRelease = s.getValue('custcol_release_order')
             const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
@@ -522,7 +527,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                     type
                 })
             }
-
             return true
         })
 
@@ -545,6 +549,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 so_productqc_sb.setSublistValue({ id: 'so_qcitemqtyneeded', line: soLine, value: i.qtyPrepared })
                 so_productqc_sb.setSublistValue({ id: 'so_qctranidref', line: soLine, value: tranid })
                 so_productqc_sb.setSublistValue({ id: 'so_qcid', line: soLine, value: so.id })
+                so_productqc_sb.setSublistValue({ id: 'so_qctype', line: soLine, value: i.type })
                 soLine++;
             })
         }
