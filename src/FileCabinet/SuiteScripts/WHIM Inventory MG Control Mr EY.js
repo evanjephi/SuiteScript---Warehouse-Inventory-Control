@@ -489,10 +489,10 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
         })
 
         fulfillment.setValue({ fieldId: 'shipstatus', value: 'B' })
-        fulfillment.setValue({ fieldId: 'custbody_viso_shipping_carrier', value: 1 })
-        fulfillment.setValue({ fieldId: 'custbody_tracking_number', value: 'TBD' })
+        //fulfillment.setValue({ fieldId: 'custbody_viso_shipping_carrier', value: 1 })
+        //fulfillment.setValue({ fieldId: 'custbody_tracking_number', value: 'TBD' })
         const today = new Date()
-        fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today }) // to be revised
+        //fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today }) // to be revised
         fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
         const lineKeyToIndex = buildLineKeyToIndexMap(fulfillment)
         let hasFulfillmentLines = false
@@ -554,7 +554,10 @@ define(['N/runtime', 'N/record', 'N/log'], (runtime, record, log) => {
             return
         }
 
-        const fulfillmentId = fulfillment.save()
+        const fulfillmentId = fulfillment.save({
+            ignoreMandatoryFields: true
+        })
+
         log.audit({
             title: 'Packed fulfillment created',
             details: `SO ${soId} IF ${fulfillmentId}`
