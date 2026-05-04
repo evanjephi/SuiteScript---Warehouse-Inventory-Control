@@ -10,6 +10,7 @@ define(['N/currentRecord'], function (currentRecord) {
             createButton('qc_submit_btn', 'QC Completed', handleQcItems, 'productqc')
             createButton('so_submit_btn', 'Release For Shipment', handleReleaseSO, 'sb_salesorder')
             createButton('so_qc_submit_btn', 'Prepare For QC', handleQCRealeaseSO, 'soproductqc')
+            createButton('storage_move_btn', 'Move to Receiving', handleMoveToReceiving, 'warehousestorage')
 
         }, 1000)
     }
@@ -227,6 +228,54 @@ define(['N/currentRecord'], function (currentRecord) {
 
                 //const currRec = currentRecord.get()
                 clearSelectedLine(currRec, lines, 'soproductqc', ['so_qcselect', 'so_qcconfirmqty'])
+            })
+            .catch(err => {
+                alert('Error: ' + err)
+            })
+    }
+
+    function handleMoveToReceiving() {
+        const currRec = currentRecord.get()
+        const lineCount = currRec.getLineCount({ sublistId: 'warehousestorage' })
+        const lines = []
+
+        for (let i = 0; i < lineCount; i++) {
+            const isSelected = currRec.getSublistValue({
+                sublistId: 'warehousestorage',
+                fieldId: 'store_select',
+                line: i
+            })
+            if (isSelected !== true) continue
+
+            const item = Number(currRec.getSublistValue({ sublistId: 'warehousestorage', fieldId: 'itemid', line: i })) || 0
+            const qty = Number(currRec.getSublistValue({ sublistId: 'warehousestorage', fieldId: 'qty', line: i })) || 0
+            const fromStatus = Number(currRec.getSublistValue({ sublistId: 'warehousestorage', fieldId: 'itemstatusid', line: i })) || 0
+
+            if (!item || qty <= 0) continue
+
+            lines.push({
+                item,
+                qty,
+                fromBin: 302,  // WHSBIN
+                toBin: 301,    // WHRBIN
+                fromStatus,
+                toStatus: 4    // Hold
+            })
+        }
+
+        if (!lines.length) {
+            alert('Please select at least one item to move.')
+            return
+        }
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'moveToReceiving', lines })
+        })
+            .then(res => res.json())
+            .then(data => {
+                alert(data.message || data.error)
             })
             .catch(err => {
                 alert('Error: ' + err)
@@ -455,6 +504,7 @@ define(['N/currentRecord'], function (currentRecord) {
         fieldChanged,
         saveRecord,
         handleRcvItems,
-        handleQcItems
+        handleQcItems,
+        handleMoveToReceiving
     }
 })
