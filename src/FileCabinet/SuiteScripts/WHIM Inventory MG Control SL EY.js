@@ -36,210 +36,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             releasedOrders(form, LOCATION, CLASS)
             // Sales Order QC Release
             soProductionQCStage(form, LOCATION, CLASS)
-            //Warehouse Receiving
-            const receiveitems_sb = form.addSublist({
-                id: 'warehousereceiving',
-                type: ui.SublistType.LIST,
-                label: 'Warehouse Receiving'
-            })
-            receiveitems_sb.addMarkAllButtons()
-            receiveitems_sb.addField({ id: 'rcv_select', type: ui.FieldType.CHECKBOX, label: 'Select' })
-            receiveitems_sb.addField({ id: 'rcv_itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
-            receiveitems_sb.addField({ id: 'rcv_item', type: ui.FieldType.TEXT, label: 'Item' })
-            receiveitems_sb.addField({ id: 'rcv_itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
-            receiveitems_sb.addField({ id: 'rcv_qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
-            receiveitems_sb.addField({ id: 'rcv_itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
-            receiveitems_sb.addField({ id: 'rcv_confirmqty', type: ui.FieldType.INTEGER, label: 'Confirm Quantity' })
-                .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
-            const statusField = receiveitems_sb.addField({
-                id: 'rcv_updatestatus',
-                type: ui.FieldType.SELECT,
-                label: 'Update Status'
-            })
-            addStatusOptions(statusField, STATUS, [1])
-
-            //Production QC
-            const productqc_sb = form.addSublist({
-                id: 'productqc',
-                type: ui.SublistType.LIST,
-                label: 'In Production - QC Stage'
-            })
-            productqc_sb.addMarkAllButtons()
-            productqc_sb.addField({ id: 'qc_select', type: ui.FieldType.CHECKBOX, label: 'Select' })
-            productqc_sb.addField({ id: 'qc_itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
-            productqc_sb.addField({ id: 'qc_item', type: ui.FieldType.TEXT, label: 'Item' })
-            productqc_sb.addField({ id: 'qc_itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
-            productqc_sb.addField({ id: 'qc_qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
-            productqc_sb.addField({ id: 'qc_itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
-            productqc_sb.addField({ id: 'qc_confirmqty', type: ui.FieldType.INTEGER, label: 'Confirm Quantity' })
-                .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
-            const prodStatusField = productqc_sb.addField({
-                id: 'qc_updatestatus',
-                type: ui.FieldType.SELECT,
-                label: 'Update Status'
-            })
-            addStatusOptions(prodStatusField, STATUS, [4])
-
-            //Items In Storage
-            const storeditems_sb = form.addSublist({
-                id: 'warehousestorage',
-                type: ui.SublistType.LIST,
-                label: 'Items In Storage'
-            })
-            storeditems_sb.addField({ id: 'itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
-            storeditems_sb.addField({ id: 'item', type: ui.FieldType.TEXT, label: 'Item' })
-            storeditems_sb.addField({ id: 'itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
-            storeditems_sb.addField({ id: 'qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
-            storeditems_sb.addField({ id: 'itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
-
-            // Load Saved Search
-            const ss = search.create({
-                type: 'inventorybalance',
-                filters: [
-                    ['location', 'anyof', LOCATION],
-                    'AND',
-                    ['binnumber', 'anyof', [WHRBIN, WHSBIN]],
-                ],
-                columns: ['item', 'location', 'binnumber', 'onhand', 'status']
-            })
-
-            let storageLine = 0
-            let receivingLine = 0
-            let productQCLine = 0
-
-            ss.run().each(result => {
-                const resbin = Number(result.getValue('binnumber'))
-                const itemstatus = Number(result.getValue('status'))
-                if (resbin === WHSBIN) {
-                    storeditems_sb.setSublistValue({
-                        id: 'item',
-                        line: storageLine,
-                        value: result.getText('item')
-                    });
-
-                    storeditems_sb.setSublistValue({
-                        id: 'itemid',
-                        line: storageLine,
-                        value: result.getValue('item')
-                    });
-
-                    storeditems_sb.setSublistValue({
-                        id: 'itembin',
-                        line: storageLine,
-                        value: result.getText('binnumber')
-                    })
-
-                    storeditems_sb.setSublistValue({
-                        id: 'qty',
-                        line: storageLine,
-                        value: result.getValue('onhand')
-                    });
-
-                    storeditems_sb.setSublistValue({
-                        id: 'itemstatus',
-                        line: storageLine,
-                        value: result.getText('status')
-                    })
-                    // log.debug('Storage Items ', {
-                    //     item: result.getText('item'),
-                    //     bin: result.getText('binnumber'),
-                    //     status: result.getValue('status')
-                    // })
-                    storageLine++
-                } else if (resbin === WHRBIN && itemstatus === STATUS.Hold) {
-                    receiveitems_sb.setSublistValue({
-                        id: 'rcv_item',
-                        line: receivingLine,
-                        value: result.getText('item')
-                    });
-
-                    receiveitems_sb.setSublistValue({
-                        id: 'rcv_itemid',
-                        line: receivingLine,
-                        value: result.getValue('item')
-                    });
-
-                    receiveitems_sb.setSublistValue({
-                        id: 'rcv_itembin',
-                        line: receivingLine,
-                        value: result.getText('binnumber')
-                    })
-
-                    receiveitems_sb.setSublistValue({
-                        id: 'rcv_qty',
-                        line: receivingLine,
-                        value: result.getValue('onhand')
-                    });
-
-                    receiveitems_sb.setSublistValue({
-                        id: 'rcv_itemstatus',
-                        line: receivingLine,
-                        value: result.getText('status')
-                    })
-
-                    receiveitems_sb.setSublistValue({
-                        id: 'rcv_updatestatus',
-                        line: receivingLine,
-                        value: STATUS['QC']
-                    })
-                    // log.debug('In warehouse receiving ', {
-                    //     item: result.getText('item'),
-                    //     bin: result.getText('binnumber'),
-                    //     status: result.getValue('status')
-                    // })
-                    receivingLine++
-                } else if (resbin === WHRBIN && itemstatus === STATUS.QC) {
-                    productqc_sb.setSublistValue({
-                        id: 'qc_item',
-                        line: productQCLine,
-                        value: result.getText('item')
-                    });
-
-                    productqc_sb.setSublistValue({
-                        id: 'qc_itemid',
-                        line: productQCLine,
-                        value: result.getValue('item')
-                    });
-
-                    productqc_sb.setSublistValue({
-                        id: 'qc_itembin',
-                        line: productQCLine,
-                        value: result.getText('binnumber')
-                    })
-
-                    productqc_sb.setSublistValue({
-                        id: 'qc_qty',
-                        line: productQCLine,
-                        value: result.getValue('onhand')
-                    });
-
-                    productqc_sb.setSublistValue({
-                        id: 'qc_itemstatus',
-                        line: productQCLine,
-                        value: result.getText('status')
-                    })
-
-                    // productqc_sb.setSublistValue({
-                    //     id: 'qc_confirmqty',
-                    //     line: productQCLine,
-                    //     value: 
-                    // })
-
-                    productqc_sb.setSublistValue({
-                        id: 'qc_updatestatus',
-                        line: productQCLine,
-                        value: STATUS['QC']
-                    })
-                    // log.debug('In warehouse receiving ', {
-                    //     item: result.getText('item'),
-                    //     bin: result.getText('binnumber'),
-                    //     status: result.getValue('status')
-                    // })
-                    productQCLine++
-                }
-
-                return true
-            })
+            // Warehouse Receiving + Production QC + Items In Storage
+            warehouseInventoryStage(form, LOCATION, WHRBIN, WHSBIN, STATUS)
             //form.addSubmitButton({ label: 'Move to Storage' })
             context.response.writePage(form);
 
@@ -370,6 +168,188 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
     return { onRequest }
 
+        function handleBinTransfer(lines) {
+        const transfer = record.create({
+            type: record.Type.BIN_TRANSFER,
+            isDynamic: true
+        })
+
+        transfer.setValue({ fieldId: 'location', value: LOCATION })
+        transfer.setValue({ fieldId: 'transferlocation', value: LOCATION })
+
+        lines.forEach(line => {
+            
+            const item = Number(line.item)
+            const qty = Number(line.qty)
+            if (!item || qty <= 0) return
+
+            const fromBin = Number(line.fromBin || WHSBIN)
+            const toBin = Number(line.toBin || WHRBIN)
+            const fromStatus = Number(line.fromStatus || GOOD_STATUS)
+            const toStatus = Number(line.toStatus || HOLD_STATUS)
+
+            transfer.selectNewLine({ sublistId: 'inventory' })
+
+            transfer.setCurrentSublistValue({
+                sublistId: 'inventory',
+                fieldId: 'item',
+                value: item
+            })
+
+            transfer.setCurrentSublistValue({
+                sublistId: 'inventory',
+                fieldId: 'quantity',
+                value: qty
+            })
+
+            const invDetail = transfer.getCurrentSublistSubrecord({
+                sublistId: 'inventory',
+                fieldId: 'inventorydetail'
+            })
+
+            invDetail.selectNewLine({ sublistId: 'inventoryassignment' })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'binnumber',
+                value: fromBin
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'inventorystatus',
+                value: fromStatus
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'tobinnumber',
+                value: toBin
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'toinventorystatus',
+                value: toStatus
+            })
+
+            invDetail.setCurrentSublistValue({
+                sublistId: 'inventoryassignment',
+                fieldId: 'quantity',
+                value: qty
+            })
+
+            invDetail.commitLine({ sublistId: 'inventoryassignment' })
+            transfer.commitLine({ sublistId: 'inventory' })
+        })
+
+        const transferId = transfer.save()
+        log.audit({ title: 'Bin transfer created', details: `ID ${transferId}` })
+    }
+
+    function warehouseInventoryStage(form, loc, whrBin, whsBin, STATUS) {
+        //Warehouse Receiving
+        const receiveitems_sb = form.addSublist({
+            id: 'warehousereceiving',
+            type: ui.SublistType.LIST,
+            label: 'Warehouse Receiving'
+        })
+        receiveitems_sb.addMarkAllButtons()
+        receiveitems_sb.addField({ id: 'rcv_select', type: ui.FieldType.CHECKBOX, label: 'Select' })
+        receiveitems_sb.addField({ id: 'rcv_itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
+        receiveitems_sb.addField({ id: 'rcv_item', type: ui.FieldType.TEXT, label: 'Item' })
+        receiveitems_sb.addField({ id: 'rcv_itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
+        receiveitems_sb.addField({ id: 'rcv_qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
+        receiveitems_sb.addField({ id: 'rcv_itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
+        receiveitems_sb.addField({ id: 'rcv_confirmqty', type: ui.FieldType.INTEGER, label: 'Confirm Quantity' })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
+        const statusField = receiveitems_sb.addField({
+            id: 'rcv_updatestatus',
+            type: ui.FieldType.SELECT,
+            label: 'Update Status'
+        })
+        addStatusOptions(statusField, STATUS, [1])
+
+        //Production QC
+        const productqc_sb = form.addSublist({
+            id: 'productqc',
+            type: ui.SublistType.LIST,
+            label: 'In Production - QC Stage'
+        })
+        productqc_sb.addMarkAllButtons()
+        productqc_sb.addField({ id: 'qc_select', type: ui.FieldType.CHECKBOX, label: 'Select' })
+        productqc_sb.addField({ id: 'qc_itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
+        productqc_sb.addField({ id: 'qc_item', type: ui.FieldType.TEXT, label: 'Item' })
+        productqc_sb.addField({ id: 'qc_itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
+        productqc_sb.addField({ id: 'qc_qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
+        productqc_sb.addField({ id: 'qc_itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
+        productqc_sb.addField({ id: 'qc_confirmqty', type: ui.FieldType.INTEGER, label: 'Confirm Quantity' })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.ENTRY })
+        const prodStatusField = productqc_sb.addField({
+            id: 'qc_updatestatus',
+            type: ui.FieldType.SELECT,
+            label: 'Update Status'
+        })
+        addStatusOptions(prodStatusField, STATUS, [4])
+
+        //Items In Storage
+        const storeditems_sb = form.addSublist({
+            id: 'warehousestorage',
+            type: ui.SublistType.LIST,
+            label: 'Items In Storage'
+        })
+        storeditems_sb.addField({ id: 'itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
+        storeditems_sb.addField({ id: 'item', type: ui.FieldType.TEXT, label: 'Item' })
+        storeditems_sb.addField({ id: 'itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
+        storeditems_sb.addField({ id: 'qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
+        storeditems_sb.addField({ id: 'itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
+
+        const ss = search.create({
+            type: 'inventorybalance',
+            filters: [
+                ['location', 'anyof', loc],
+                'AND',
+                ['binnumber', 'anyof', [whrBin, whsBin]],
+            ],
+            columns: ['item', 'location', 'binnumber', 'onhand', 'status']
+        })
+
+        let storageLine = 0
+        let receivingLine = 0
+        let productQCLine = 0
+
+        ss.run().each(result => {
+            const resbin = Number(result.getValue('binnumber'))
+            const itemstatus = Number(result.getValue('status'))
+
+            if (resbin === whsBin) {
+                storeditems_sb.setSublistValue({ id: 'item', line: storageLine, value: result.getText('item') })
+                storeditems_sb.setSublistValue({ id: 'itemid', line: storageLine, value: result.getValue('item') })
+                storeditems_sb.setSublistValue({ id: 'itembin', line: storageLine, value: result.getText('binnumber') })
+                storeditems_sb.setSublistValue({ id: 'qty', line: storageLine, value: result.getValue('onhand') })
+                storeditems_sb.setSublistValue({ id: 'itemstatus', line: storageLine, value: result.getText('status') })
+                storageLine++
+            } else if (resbin === whrBin && itemstatus === STATUS.Hold) {
+                receiveitems_sb.setSublistValue({ id: 'rcv_item', line: receivingLine, value: result.getText('item') })
+                receiveitems_sb.setSublistValue({ id: 'rcv_itemid', line: receivingLine, value: result.getValue('item') })
+                receiveitems_sb.setSublistValue({ id: 'rcv_itembin', line: receivingLine, value: result.getText('binnumber') })
+                receiveitems_sb.setSublistValue({ id: 'rcv_qty', line: receivingLine, value: result.getValue('onhand') })
+                receiveitems_sb.setSublistValue({ id: 'rcv_itemstatus', line: receivingLine, value: result.getText('status') })
+                receiveitems_sb.setSublistValue({ id: 'rcv_updatestatus', line: receivingLine, value: STATUS['QC'] })
+                receivingLine++
+            } else if (resbin === whrBin && itemstatus === STATUS.QC) {
+                productqc_sb.setSublistValue({ id: 'qc_item', line: productQCLine, value: result.getText('item') })
+                productqc_sb.setSublistValue({ id: 'qc_itemid', line: productQCLine, value: result.getValue('item') })
+                productqc_sb.setSublistValue({ id: 'qc_itembin', line: productQCLine, value: result.getText('binnumber') })
+                productqc_sb.setSublistValue({ id: 'qc_qty', line: productQCLine, value: result.getValue('onhand') })
+                productqc_sb.setSublistValue({ id: 'qc_itemstatus', line: productQCLine, value: result.getText('status') })
+                productqc_sb.setSublistValue({ id: 'qc_updatestatus', line: productQCLine, value: STATUS['QC'] })
+                productQCLine++
+            }
+
+            return true
+        })
+    }
 
     function releasedOrders(form, loc, ot) {
 
