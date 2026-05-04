@@ -158,6 +158,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         transfer.setValue({ fieldId: 'transferlocation', value: LOCATION })
 
         lines.forEach(line => {
+            
             const item = Number(line.item)
             const qty = Number(line.qty)
             if (!item || qty <= 0) return
