@@ -112,6 +112,23 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 })
             }
 
+            if (action === 'moveToReceiving') {
+                const mrTask = task.create({
+                    taskType: task.TaskType.MAP_REDUCE,
+                    scriptId: 'customscript_ey_whim_control_mr',
+                    deploymentId: 'customdeploy_ey_whim_control_mr',
+                    params: {
+                        custscript_action: 'releasing',
+                        custscript_data: JSON.stringify(lines)
+                    }
+                })
+                mrTask.submit()
+                context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
+                context.response.write(JSON.stringify({
+                    message: 'Items are being moved to receiving (Hold status).'
+                }))
+            }
+
             if (action === 'releasing') {
                 const mrTask = task.create({
                     taskType: task.TaskType.MAP_REDUCE,
@@ -298,11 +315,15 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             type: ui.SublistType.LIST,
             label: 'Items In Storage'
         })
+        storeditems_sb.addMarkAllButtons()
+        storeditems_sb.addField({ id: 'store_select', type: ui.FieldType.CHECKBOX, label: 'Select' })
         storeditems_sb.addField({ id: 'itemid', type: ui.FieldType.TEXT, label: 'Internal ID' })
         storeditems_sb.addField({ id: 'item', type: ui.FieldType.TEXT, label: 'Item' })
         storeditems_sb.addField({ id: 'itembin', type: ui.FieldType.TEXT, label: 'Current Storage' })
         storeditems_sb.addField({ id: 'qty', type: ui.FieldType.INTEGER, label: 'Quantity' })
         storeditems_sb.addField({ id: 'itemstatus', type: ui.FieldType.TEXT, label: 'Status' })
+        storeditems_sb.addField({ id: 'itemstatusid', type: ui.FieldType.INTEGER, label: 'Status ID' })
+            .updateDisplayType({ displayType: ui.FieldDisplayType.HIDDEN })
 
         const ss = search.create({
             type: 'inventorybalance',
@@ -328,6 +349,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 storeditems_sb.setSublistValue({ id: 'itembin', line: storageLine, value: result.getText('binnumber') })
                 storeditems_sb.setSublistValue({ id: 'qty', line: storageLine, value: result.getValue('onhand') })
                 storeditems_sb.setSublistValue({ id: 'itemstatus', line: storageLine, value: result.getText('status') })
+                storeditems_sb.setSublistValue({ id: 'itemstatusid', line: storageLine, value: Number(result.getValue('status')) })
                 storageLine++
             } else if (resbin === whrBin && itemstatus === STATUS.Hold) {
                 receiveitems_sb.setSublistValue({ id: 'rcv_item', line: receivingLine, value: result.getText('item') })
