@@ -133,6 +133,8 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 return
             }
 
+            //144249 144392 144393 
+
             log.audit({
                 title: 'Reduce complete',
                 details: `${action} key ${key} lines ${lines.length}`
@@ -300,7 +302,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     function handleQCRelease(soId, lines) {
         
 
-        // Step 1 bin transfer first (WHRBIN Hold > WHSBIN QC), expanding kits to components
+        //Step 1 bin transfer first (WHRBIN Hold > WHSBIN QC), expanding kits to components
         try {
             const binLines = buildBinTransferLines(lines)
             if (binLines.length > 0) {
@@ -319,7 +321,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         //step 2 update SO line stages and prepared qtys, and create fulfillment with prepared qtys
          const selectedQtyByLineKey = buildItemStages(soId, lines)
 
-        // Step 3 fulfillment only after bin transfer succeeds
+        //Step 3 fulfillment only after bin transfer succeeds
         createPackedFulfillment(soId, selectedQtyByLineKey)
     }
 
