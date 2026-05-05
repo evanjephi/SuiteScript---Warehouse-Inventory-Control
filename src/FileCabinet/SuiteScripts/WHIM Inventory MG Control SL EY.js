@@ -194,6 +194,10 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                 'AND',
                 ['class', 'is', 8],
                 'AND',
+                ['location', 'is', 1],
+                'AND',
+                ['preferredbin', 'is', 'T'],
+                'AND',
                 ['isinactive', 'is', 'F']
             ],
             columns: ['itemid']
@@ -234,7 +238,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                 })
             }
             //const binDataText = binData.
-            log.debug('binData', JSON.stringify(binData))
+            //log.debug('binData', JSON.stringify(binData))
             // sublist.setSublistValue({
             //     id: 'bin_status',
             //     line: i,
@@ -255,24 +259,27 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             i++
 
             //--- set inv ---
-            if (useBins === false) {
-                invItem.setSublistValue({
-                    sublistId: 'binnumber',
-                    fieldId: 'preferredbin',
-                    line: 0,
-                    value: false
-                })
+            if (useBins === true) {
+                try {
+                    invItem.setSublistValue({
+                        sublistId: 'binnumber',
+                        fieldId: 'preferredbin',
+                        line: 0,
+                        value: false
+                    })
 
-                if (invItem.getSublistValue({
-                    sublistId: 'binnumber',
-                    fieldId: 'preferredbin',
-                    line: 0
-                }) == false) {
-                    log.debug('Preferred bin removed for item ' + itemname)
+                    if (invItem.getSublistValue({
+                        sublistId: 'binnumber',
+                        fieldId: 'preferredbin',
+                        line: 0
+                    }) == false) {
+                        log.debug('Preferred bin removed for item ' + itemname)
+                        invItem.save()
+                    }
+                } catch (e) {
+                    log.error('Error removing preferred bin for item ' + itemname, e.message || String(e))
                 }
-
-
-                //invItem.save()
+                
             }
 
             return true
