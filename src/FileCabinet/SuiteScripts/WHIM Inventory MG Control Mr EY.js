@@ -124,7 +124,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
               handleConsolidatedQCRelease(lines)
               handleQCRelease(lines[0].soId, lines)
             } else if (action === 'releasing') {
-              //  handleBinTransfer(lines)
+                handleBinTransfer(lines)
             } else {
                 log.error({
                     title: 'Unknown action in reduce',
