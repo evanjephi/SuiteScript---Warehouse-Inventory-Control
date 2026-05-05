@@ -121,8 +121,8 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
         try {
             if (key === 'soQCRelease|batch') {
-              handleConsolidatedQCRelease(lines)
-              handleQCRelease(lines[0].soId, lines)
+                handleConsolidatedQCRelease(lines)
+                handleQCRelease(lines[0].soId, lines)
             } else if (action === 'releasing') {
                 handleBinTransfer(lines)
             } else {
@@ -148,6 +148,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
     }
 
+
     function handleBinTransfer(lines, soLabels) {
         const transfer = record.create({
             type: record.Type.BIN_TRANSFER,
@@ -163,7 +164,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         lines.forEach(line => {
-            
+
             const item = Number(line.item)
             const qty = Number(line.qty)
             if (!item || qty <= 0) return
