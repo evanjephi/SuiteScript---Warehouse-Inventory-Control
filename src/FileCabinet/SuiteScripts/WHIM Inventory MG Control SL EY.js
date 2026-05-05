@@ -2,12 +2,12 @@
  * @NApiVersion 2.1
  * @NScriptType Suitelet
  */
-define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
+define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, task, record) => {
     const onRequest = (context) => {
 
         if (context.request.method === 'GET') {
             const WHRBIN = 301
-            //const WHSBIN = 302
+            const WHSBIN = 302
             const LOCATION = 1
             const CLASS = 13
             const STATUS = {
@@ -38,7 +38,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
             soProductionQCStage(form, LOCATION, CLASS)
             // Warehouse Receiving + Production QC + Items In Storage
             warehouseInventoryStage(form, LOCATION, WHRBIN, WHSBIN, STATUS)
-            //form.addSubmitButton({ label: 'Move to Storage' })
+            // removePreferredBins()
+            removePreferredBins()
             context.response.writePage(form);
 
         } else {
@@ -184,6 +185,99 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
     }
 
     return { onRequest }
+
+    function removePreferredBins() {
+        const inventorySearch = search.create({
+            type: search.Type.ITEM,
+            filters: [
+                ['type', 'anyof', 'InvtPart'],
+                'AND',
+                ['class', 'is', 8],
+                'AND',
+                ['isinactive', 'is', 'F']
+            ],
+            columns: ['itemid']
+        })
+        let i = 0
+        inventorySearch.run().each(res => {
+            const id = res.id
+            const invItem = record.load({
+                type: record.Type.INVENTORY_ITEM,
+                id: id
+            })
+            //--- Display Inv ---
+            const itemname = res.getValue('itemid')
+            const useBins = invItem.getValue('usebins')
+            const bincount = invItem.getLineCount({ sublistId: 'binnumber' })
+            const binData = []
+            for (let x = 0; x < bincount; x++) {
+                const loc = invItem.getSublistValue({
+                    sublistId: 'binnumber',
+                    fieldId: 'location',
+                    line: x
+                })
+                const binnum = invItem.getSublistValue({
+                    sublistId: 'binnumber',
+                    fieldId: 'binnumber_display',
+                    line: x
+                })
+                const prefbin = invItem.getSublistValue({
+                    sublistId: 'binnumber',
+                    fieldId: 'preferredbin',
+                    line: x
+                })
+                binData.push({
+                    id: id,
+                    location: loc,
+                    binnumber: binnum,
+                    preferredbin: prefbin
+                })
+            }
+            //const binDataText = binData.
+            log.debug('binData', JSON.stringify(binData))
+            // sublist.setSublistValue({
+            //     id: 'bin_status',
+            //     line: i,
+            //     value: useBins.toString()
+            // })
+
+            // sublist.setSublistValue({
+            //     id: 'bin_number',
+            //     line: i,
+            //     value: JSON.stringify(binData)
+            // })
+
+            // sublist.setSublistValue({
+            //     id: 'item_id',
+            //     line: i,
+            //     value: itemname
+            // })
+            i++
+
+            //--- set inv ---
+            if (useBins === false) {
+                invItem.setSublistValue({
+                    sublistId: 'binnumber',
+                    fieldId: 'preferredbin',
+                    line: 0,
+                    value: false
+                })
+
+                if (invItem.getSublistValue({
+                    sublistId: 'binnumber',
+                    fieldId: 'preferredbin',
+                    line: 0
+                }) == false) {
+                    log.debug('Preferred bin removed for item ' + itemname)
+                }
+
+
+                //invItem.save()
+            }
+
+            return true
+        })
+    }
 
     function warehouseInventoryStage(form, loc, whrBin, whsBin, STATUS) {
         //Warehouse Receiving
@@ -474,7 +568,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
                 so_productqc_sb.setSublistValue({ id: 'so_qctype', line: soLine, value: i.type })
 
                 if (i.type === 'Kit') {
-                     getKitComponents(i.itemId, i.qty)
+                    getKitComponents(i.itemId, i.qty)
                 }
                 soLine++;
             })
