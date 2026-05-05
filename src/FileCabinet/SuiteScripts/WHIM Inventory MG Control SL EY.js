@@ -7,7 +7,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
 
         if (context.request.method === 'GET') {
             const WHRBIN = 301
-            const WHSBIN = 302
+            //const WHSBIN = 302
             const LOCATION = 1
             const CLASS = 13
             const STATUS = {
@@ -184,85 +184,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task'], (ui, search, task) => {
     }
 
     return { onRequest }
-
-        function handleBinTransfer(lines) {
-        const transfer = record.create({
-            type: record.Type.BIN_TRANSFER,
-            isDynamic: true
-        })
-
-        transfer.setValue({ fieldId: 'location', value: LOCATION })
-        transfer.setValue({ fieldId: 'transferlocation', value: LOCATION })
-
-        lines.forEach(line => {
-            
-            const item = Number(line.item)
-            const qty = Number(line.qty)
-            if (!item || qty <= 0) return
-
-            const fromBin = Number(line.fromBin || WHSBIN)
-            const toBin = Number(line.toBin || WHRBIN)
-            const fromStatus = Number(line.fromStatus || GOOD_STATUS)
-            const toStatus = Number(line.toStatus || HOLD_STATUS)
-
-            transfer.selectNewLine({ sublistId: 'inventory' })
-
-            transfer.setCurrentSublistValue({
-                sublistId: 'inventory',
-                fieldId: 'item',
-                value: item
-            })
-
-            transfer.setCurrentSublistValue({
-                sublistId: 'inventory',
-                fieldId: 'quantity',
-                value: qty
-            })
-
-            const invDetail = transfer.getCurrentSublistSubrecord({
-                sublistId: 'inventory',
-                fieldId: 'inventorydetail'
-            })
-
-            invDetail.selectNewLine({ sublistId: 'inventoryassignment' })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'binnumber',
-                value: fromBin
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'inventorystatus',
-                value: fromStatus
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'tobinnumber',
-                value: toBin
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'toinventorystatus',
-                value: toStatus
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'quantity',
-                value: qty
-            })
-
-            invDetail.commitLine({ sublistId: 'inventoryassignment' })
-            transfer.commitLine({ sublistId: 'inventory' })
-        })
-
-        const transferId = transfer.save()
-        log.audit({ title: 'Bin transfer created', details: `ID ${transferId}` })
-    }
 
     function warehouseInventoryStage(form, loc, whrBin, whsBin, STATUS) {
         //Warehouse Receiving
