@@ -77,7 +77,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             })
 
             context.write({
-                key: `so|${soId}`,
+                key: 'soQCRelease|batch',
                 value: JSON.stringify({ ...line, soId, confirmQty })
             })
             return
@@ -120,11 +120,11 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         const key = String(context.key)
 
         try {
-            if (key.indexOf('so|') === 0 || action === 'soQCRelease') {
-                const soId = key.indexOf('so|') === 0 ? Number(key.split('|')[1]) : Number(context.key)
-                handleQCRelease(soId, lines)
+            if (key === 'soQCRelease|batch') {
+              handleConsolidatedQCRelease(lines)
+              handleQCRelease(lines[0].soId, lines)
             } else if (action === 'releasing') {
-                handleBinTransfer(lines)
+              //  handleBinTransfer(lines)
             } else {
                 log.error({
                     title: 'Unknown action in reduce',
@@ -148,7 +148,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
     }
 
-    function handleBinTransfer(lines) {
+    function handleBinTransfer(lines, soLabels) {
         const transfer = record.create({
             type: record.Type.BIN_TRANSFER,
             isDynamic: true
@@ -156,6 +156,11 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
         transfer.setValue({ fieldId: 'location', value: LOCATION })
         transfer.setValue({ fieldId: 'transferlocation', value: LOCATION })
+
+        if (soLabels && soLabels.length) {
+            const memo = 'Items made available for ' + soLabels.join(' and ')
+            transfer.setValue({ fieldId: 'memo', value: memo })
+        }
 
         lines.forEach(line => {
             
@@ -301,8 +306,6 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     }
 
     function handleQCRelease(soId, lines) {
-        
-
         //Step 1 bin transfer first (WHRBIN Hold > WHSBIN QC), expanding kits to components
         try {
             const binLines = buildBinTransferLines(lines)
@@ -320,10 +323,69 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         //step 2 update SO line stages and prepared qtys, and create fulfillment with prepared qtys
-         const selectedQtyByLineKey = buildItemStages(soId, lines)
+        const selectedQtyByLineKey = buildItemStages(soId, lines)
 
         //Step 3 fulfillment only after bin transfer succeeds
         createPackedFulfillment(soId, selectedQtyByLineKey)
+    }
+
+    function handleConsolidatedQCRelease(lines) {
+        // Step 1: look up SO transaction numbers for memo
+        const soIdList = [...new Set(lines.map(l => Number(l.soId)).filter(Boolean))]
+        const soTranIds = {}
+        try {
+            search.create({
+                type: record.Type.SALES_ORDER,
+                filters: [['internalid', 'anyof', soIdList]],
+                columns: ['tranid']
+            }).run().each(r => {
+                soTranIds[r.id] = r.getText('tranid')
+                return true
+            })
+        } catch (e) {
+            log.error({ title: 'Failed to look up SO tranids', details: e.message || String(e) })
+        }
+
+        //const soLabels = soIdList.map(id => soTranIds[String(id)] || ('SO' + id))
+
+        // Step 2: ONE consolidated bin transfer for all SOs
+        try {
+            const binLines = buildBinTransferLines(lines)
+            if (binLines.length > 0) {
+                handleBinTransfer(binLines, soTranIds)
+            } else {
+                log.audit({ title: 'No bin transfer lines for batch', details: JSON.stringify(soTranIds) })
+            }
+        } catch (e) {
+            log.error({
+                title: 'Consolidated bin transfer failed — fulfillments will NOT be created',
+                details: e.message || String(e)
+            })
+            return
+        }
+
+        // Step 3 & 4: perSO stage updates then fulfillments
+        const bySOId = {}
+        lines.forEach(line => {
+            const soId = Number(line.soId)
+            if (!bySOId[soId]) bySOId[soId] = []
+            bySOId[soId].push(line)
+        })
+
+        for (const [soIdStr, soLines] of Object.entries(bySOId)) {
+            const soId = Number(soIdStr)
+            try {
+                const selectedQtyByLineKey = buildItemStages(soId, soLines)
+                if (selectedQtyByLineKey && Object.keys(selectedQtyByLineKey).length) {
+                    createPackedFulfillment(soId, selectedQtyByLineKey)
+                }
+            } catch (e) {
+                log.error({
+                    title: `Failed to process SO ${soId}`,
+                    details: e.message || String(e)
+                })
+            }
+        }
     }
 
     function buildItemStages(soId, lines) {
