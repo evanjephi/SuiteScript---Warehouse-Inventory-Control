@@ -37,9 +37,9 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             // Sales Order QC Release
             soProductionQCStage(form, LOCATION, CLASS)
             // Warehouse Receiving + Production QC + Items In Storage
-            warehouseInventoryStage(form, LOCATION, WHRBIN, WHSBIN, STATUS)
-            // removePreferredBins()
-            removePreferredBins()
+            warehouseInventoryStage(form, LOCATION, WHRBIN, STATUS)
+            
+           // removePreferredBins()
             context.response.writePage(form);
 
         } else {
@@ -152,7 +152,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             if (action === 'soQCRelease') {
 
                 log.debug('soQCRelease lines', JSON.stringify(lines))
-
                 const overPrepared = findOverPreparedLines(lines)
                 if (overPrepared.length > 0) {
                     context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
@@ -284,7 +283,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
         })
     }
 
-    function warehouseInventoryStage(form, loc, whrBin, whsBin, STATUS) {
+    function warehouseInventoryStage(form, loc, whrBin, STATUS) {
         //Warehouse Receiving
         const receiveitems_sb = form.addSublist({
             id: 'warehousereceiving',
@@ -329,7 +328,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
         })
         addStatusOptions(prodStatusField, STATUS, [4])
 
-        //Items In Storage
+        //Items In Storage/Hold Stock
         const storeditems_sb = form.addSublist({
             id: 'warehousestorage',
             type: ui.SublistType.LIST,
@@ -350,10 +349,12 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             filters: [
                 ['location', 'anyof', loc],
                 'AND',
-                ['binnumber', 'anyof', [whrBin, whsBin]],
+                ['binnumber', 'anyof', [whrBin]],
             ],
             columns: ['item', 'location', 'binnumber', 'onhand', 'status']
         })
+
+        log.debug('Running inventory balance search for location ', ss.columns)
 
         let storageLine = 0
         let receivingLine = 0
@@ -363,7 +364,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             const resbin = Number(result.getValue('binnumber'))
             const itemstatus = Number(result.getValue('status'))
 
-            if (resbin === whsBin) {
+            if ( resbin === whrBin && itemstatus === STATUS.Good) {
                 storeditems_sb.setSublistValue({ id: 'item', line: storageLine, value: result.getText('item') })
                 storeditems_sb.setSublistValue({ id: 'itemid', line: storageLine, value: result.getValue('item') })
                 storeditems_sb.setSublistValue({ id: 'itembin', line: storageLine, value: result.getText('binnumber') })
@@ -377,7 +378,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                 receiveitems_sb.setSublistValue({ id: 'rcv_itembin', line: receivingLine, value: result.getText('binnumber') })
                 receiveitems_sb.setSublistValue({ id: 'rcv_qty', line: receivingLine, value: result.getValue('onhand') })
                 receiveitems_sb.setSublistValue({ id: 'rcv_itemstatus', line: receivingLine, value: result.getText('status') })
-                receiveitems_sb.setSublistValue({ id: 'rcv_updatestatus', line: receivingLine, value: STATUS['QC'] })
+                receiveitems_sb.setSublistValue({ id: 'rcv_itemstatusid', line: receivingLine, value: Number(result.getValue('status')) })
+                //receiveitems_sb.setSublistValue({ id: 'rcv_updatestatus', line: receivingLine, value: STATUS['QC'] })
                 receivingLine++
             } else if (resbin === whrBin && itemstatus === STATUS.QC) {
                 productqc_sb.setSublistValue({ id: 'qc_item', line: productQCLine, value: result.getText('item') })
@@ -385,7 +387,8 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                 productqc_sb.setSublistValue({ id: 'qc_itembin', line: productQCLine, value: result.getText('binnumber') })
                 productqc_sb.setSublistValue({ id: 'qc_qty', line: productQCLine, value: result.getValue('onhand') })
                 productqc_sb.setSublistValue({ id: 'qc_itemstatus', line: productQCLine, value: result.getText('status') })
-                productqc_sb.setSublistValue({ id: 'qc_updatestatus', line: productQCLine, value: STATUS['QC'] })
+                productqc_sb.setSublistValue({ id: 'qc_itemstatusid', line: productQCLine, value: Number(result.getValue('status')) })
+                //productqc_sb.setSublistValue({ id: 'qc_updatestatus', line: productQCLine, value: STATUS['QC'] })
                 productQCLine++
             }
 
