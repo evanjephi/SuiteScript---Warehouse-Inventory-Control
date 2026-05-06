@@ -194,8 +194,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                 'AND',
                 ['class', 'is', 8],
                 'AND',
-                ['location', 'is', 1],
-                'AND',
                 ['preferredbin', 'is', 'T'],
                 'AND',
                 ['isinactive', 'is', 'F']
