@@ -50,9 +50,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             const lines = body.lines
             let data = [];
 
-            log.debug('action', action)
-            log.debug('lines', JSON.stringify(lines))
-
             if (action === 'receiving') {
                 lines.forEach(function (line) {
                     log.debug('Line ' + line.line, 'Confirm Qty: ' + line.confirmQty)
@@ -113,22 +110,22 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                 })
             }
 
-            if (action === 'moveToReceiving') {
-                const mrTask = task.create({
-                    taskType: task.TaskType.MAP_REDUCE,
-                    scriptId: 'customscript_ey_whim_control_mr',
-                    deploymentId: 'customdeploy_ey_whim_control_mr',
-                    params: {
-                        custscript_action: 'releasing',
-                        custscript_data: JSON.stringify(lines)
-                    }
-                })
-                mrTask.submit()
-                context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
-                context.response.write(JSON.stringify({
-                    message: 'Items are being moved to receiving (Hold status).'
-                }))
-            }
+            // if (action === 'moveToReceiving') {
+            //     const mrTask = task.create({
+            //         taskType: task.TaskType.MAP_REDUCE,
+            //         scriptId: 'customscript_ey_whim_control_mr',
+            //         deploymentId: 'customdeploy_ey_whim_control_mr',
+            //         params: {
+            //             custscript_action: 'releasing',
+            //             custscript_data: JSON.stringify(lines)
+            //         }
+            //     })
+            //     mrTask.submit()
+            //     context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
+            //     context.response.write(JSON.stringify({
+            //         message: 'Items are being moved to receiving (Hold status).'
+            //     }))
+            // }
 
             if (action === 'releasing') {
                 const mrTask = task.create({
@@ -150,8 +147,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             }
 
             if (action === 'soQCRelease') {
-
-                log.debug('soQCRelease lines', JSON.stringify(lines))
                 const overPrepared = findOverPreparedLines(lines)
                 if (overPrepared.length > 0) {
                     context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
@@ -172,7 +167,7 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
                         custscript_data: JSON.stringify(lines)
                     }
                 })
-
+                log.debug('soQCRelease Lines', JSON.stringify(lines))
                 mrTask.submit()
 
                 context.response.setHeader({ name: 'Content-Type', value: 'application/json' })
@@ -353,8 +348,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             ],
             columns: ['item', 'location', 'binnumber', 'onhand', 'status']
         })
-
-        log.debug('Running inventory balance search for location ', ss.columns)
 
         let storageLine = 0
         let receivingLine = 0
