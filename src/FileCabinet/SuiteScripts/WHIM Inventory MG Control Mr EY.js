@@ -245,13 +245,12 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
         statusChange.setValue({ fieldId: 'location', value: LOCATION })
         statusChange.setValue({ fieldId: 'previousstatus', value: HOLD_STATUS }) 
-        statusChange.setValue({ fieldId: 'revisedstatus', value: QC_STATUS })
+        statusChange.setValue({ fieldId: 'revisedstatus', value: GOOD_STATUS })
         if (memoText) {
             statusChange.setValue({ fieldId: 'memo', value: memoText })
         }
 
         log.debug('step 2',{ title: 'Handle Status Change', details: memoText, lines: lines })
-
 
         lines.forEach((line, invLine) => {
             const item = Number(line.item)
@@ -360,20 +359,20 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         const soLabels = soIdList.map(id => String(soTranIds[String(id)] || ('SO' + id)))
         const memo = soLabels.length ? ('Items made available for ' + soLabels.join(', ')) : ''
         // Step 2: ONE consolidated inventory status change for all SOs
-        // try {
-        //     const statusLines = buildStatusChangeLines(lines)
-        //     if (statusLines.length > 0) {
-        //         handleStatusChange(statusLines, memo)
-        //     } else {
-        //         log.debug({ title: 'No status change lines for batch', details: JSON.stringify(soLabels) })
-        //     }
-        // } catch (e) {
-        //     log.error({
-        //         title: 'Consolidated status change failed - fulfillments will NOT be created',
-        //         details: e.message || String(e)
-        //     })
-        //     return
-        // }
+        try {
+            const statusLines = buildStatusChangeLines(lines)
+            if (statusLines.length > 0) {
+                handleStatusChange(statusLines, memo)
+            } else {
+                log.debug({ title: 'No status change lines for batch', details: JSON.stringify(soLabels) })
+            }
+        } catch (e) {
+            log.error({
+                title: 'Consolidated status change failed - fulfillments will NOT be created',
+                details: e.message || String(e)
+            })
+            return
+        }
 
         // Step 3 & 4: per-SO fulfillments then stage saves
         const bySOId = {}
@@ -524,9 +523,9 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             }
 
             components.forEach(({ item: compId, qty: compQty }) => {
-                const key = [compId, WHRBIN, HOLD_STATUS, QC_STATUS].join('|')
+                const key = [compId, WHRBIN, HOLD_STATUS, GOOD_STATUS].join('|')
                 if (!aggregated[key]) {
-                    aggregated[key] = { item: compId, qty: 0, bin: WHRBIN, fromStatus: HOLD_STATUS, toStatus: QC_STATUS }
+                    aggregated[key] = { item: compId, qty: 0, bin: WHRBIN, fromStatus: HOLD_STATUS, toStatus: GOOD_STATUS }
                 }
                 aggregated[key].qty += compQty
             })
@@ -602,7 +601,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         //fulfillment.setValue({ fieldId: 'custbody_viso_shipping_carrier', value: 1 })
         //fulfillment.setValue({ fieldId: 'custbody_tracking_number', value: 'TBD' })
         const today = new Date()
-        //fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today }) // to be revised
+        //fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today })
         fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
         const lineKeyToIndex = buildLineKeyToIndexMap(fulfillment)
         let hasFulfillmentLines = false
