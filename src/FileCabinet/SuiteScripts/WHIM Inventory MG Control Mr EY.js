@@ -114,17 +114,21 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
     function reduce(context) {
         const lines = context.values.map(v => JSON.parse(v))
+
         if (!lines.length) return
 
         const action = lines[0].action
         const key = String(context.key)
-
+        log.debug({
+            title: 'Reduce lines',
+            details: lines,
+            key: key
+        })
         try {
             if (key === 'soQCRelease|batch') {
                 handleConsolidatedQCRelease(lines)
-                handleQCRelease(lines[0].soId, lines)
             } else if (action === 'releasing') {
-                handleBinTransfer(lines)
+                handleStatusChange(lines)
             } else {
                 log.error({
                     title: 'Unknown action in reduce',
@@ -133,9 +137,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 return
             }
 
-            //144249 144392 144393 
-
-            log.audit({
+            log.debug({
                 title: 'Reduce complete',
                 details: `${action} key ${key} lines ${lines.length}`
             })
@@ -230,106 +232,114 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         })
 
         const transferId = transfer.save()
-        log.audit({ title: 'Bin transfer created', details: `ID ${transferId}` })
+        log.debug({ title: 'Bin transfer created', details: `ID ${transferId}` })
     }
 
 
-    function handleStatusChange(lines) {
-        const QC_STATUS = 3
+    function handleStatusChange(lines, memoText) {
 
         const statusChange = record.create({
             type: record.Type.INVENTORY_STATUS_CHANGE,
-            isDynamic: true
+            isDynamic: false
         })
 
         statusChange.setValue({ fieldId: 'location', value: LOCATION })
+        statusChange.setValue({ fieldId: 'previousstatus', value: HOLD_STATUS }) 
+        statusChange.setValue({ fieldId: 'revisedstatus', value: QC_STATUS })
+        if (memoText) {
+            statusChange.setValue({ fieldId: 'memo', value: memoText })
+        }
 
-        lines.forEach(line => {
+        log.debug('step 2',{ title: 'Handle Status Change', details: memoText, lines: lines })
+
+
+        lines.forEach((line, invLine) => {
             const item = Number(line.item)
             const qty = Number(line.qty)
             if (!item || qty <= 0) return
 
-            const fromStatus = Number(line.fromStatus || QC_STATUS)
-            const toStatus = Number(line.toStatus || GOOD_STATUS)
-            const bin = Number(line.bin || WHSBIN)
+            const bin = Number(line.bin || WHRBIN)
 
-            statusChange.selectNewLine({ sublistId: 'inventory' })
+            statusChange.insertLine({
+                sublistId: 'inventory',
+                line: invLine
+            })
 
-            statusChange.setCurrentSublistValue({
+            statusChange.setSublistValue({
                 sublistId: 'inventory',
                 fieldId: 'item',
+                line: invLine,
                 value: item
             })
 
-            statusChange.setCurrentSublistValue({
+            statusChange.setSublistValue({
                 sublistId: 'inventory',
-                fieldId: 'adjustqtyby',
+                fieldId: 'quantity',
+                line: invLine,
                 value: qty
             })
 
-            const invDetail = statusChange.getCurrentSublistSubrecord({
+            const invDetail = statusChange.getSublistSubrecord({
                 sublistId: 'inventory',
-                fieldId: 'inventorydetail'
+                fieldId: 'inventorydetail',
+                line: invLine
             })
 
-            invDetail.selectNewLine({ sublistId: 'inventoryassignment' })
+            invDetail.insertLine({
+                sublistId: 'inventoryassignment',
+                line: 0
+            })
 
-            invDetail.setCurrentSublistValue({
+            invDetail.setSublistValue({
                 sublistId: 'inventoryassignment',
                 fieldId: 'binnumber',
+                line: 0,
                 value: bin
             })
 
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'inventorystatus',
-                value: fromStatus
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'toinventorystatus',
-                value: toStatus
-            })
-
-            invDetail.setCurrentSublistValue({
+            invDetail.setSublistValue({
                 sublistId: 'inventoryassignment',
                 fieldId: 'quantity',
+                line: 0,
                 value: qty
             })
-
-            invDetail.commitLine({ sublistId: 'inventoryassignment' })
-            statusChange.commitLine({ sublistId: 'inventory' })
         })
 
         const statusChangeId = statusChange.save()
-        log.audit({ title: 'Inventory status change created', details: `ID ${statusChangeId}` })
+        log.debug({ title: 'Inventory status change created', details: `ID ${statusChangeId}` })
     }
 
-    function handleQCRelease(soId, lines) {
-        //Step 1 bin transfer first (WHRBIN Hold > WHSBIN QC), expanding kits to components
+  /*   function handleQCRelease(soId, lines) {
+        // Step 1 status change first (HOLD > QC), expanding kits to components
         try {
-            const binLines = buildBinTransferLines(lines)
-            if (binLines.length > 0) {
-                handleBinTransfer(binLines)
+            const statusLines = buildStatusChangeLines(lines)
+            if (statusLines.length > 0) {
+                handleStatusChange(statusLines)
             } else {
-                log.audit({ title: 'No bin transfer lines', details: `SO ${soId} - all items may be non-inventory` })
+                log.debug({ title: 'No status change lines', details: `SO ${soId} - all items may be non-inventory` })
             }
         } catch (e) {
             log.error({
-                title: `Bin transfer failed for SO ${soId} - fulfillment will NOT be created`,
+                title: `Status change failed for SO ${soId} - fulfillment will NOT be created`,
                 details: e.message || String(e)
             })
             return
         }
 
-        //step 2 update SO line stages and prepared qtys, and create fulfillment with prepared qtys
-        const selectedQtyByLineKey = buildItemStages(soId, lines)
+        // Step 2 get selected qty map
+        const { selectedQtyByLineKey, rec, hasSoChanges } = buildItemStages(soId, lines, true)
 
-        //Step 3 fulfillment only after bin transfer succeeds
+        // Step 3 fulfillment
         createPackedFulfillment(soId, selectedQtyByLineKey)
-    }
 
+        // Step 4 save SO staged fields
+        if (hasSoChanges) {
+            rec.save()
+            log.debug({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
+        }
+    }
+ */
+    
     function handleConsolidatedQCRelease(lines) {
         // Step 1: look up SO transaction numbers for memo
         const soIdList = [...new Set(lines.map(l => Number(l.soId)).filter(Boolean))]
@@ -340,32 +350,32 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 filters: [['internalid', 'anyof', soIdList]],
                 columns: ['tranid']
             }).run().each(r => {
-                soTranIds[r.id] = r.getText('tranid')
+                soTranIds[r.id] = r.getValue('tranid')
                 return true
             })
         } catch (e) {
             log.error({ title: 'Failed to look up SO tranids', details: e.message || String(e) })
         }
 
-        //const soLabels = soIdList.map(id => soTranIds[String(id)] || ('SO' + id))
+        const soLabels = soIdList.map(id => String(soTranIds[String(id)] || ('SO' + id)))
+        const memo = soLabels.length ? ('Items made available for ' + soLabels.join(', ')) : ''
+        // Step 2: ONE consolidated inventory status change for all SOs
+        // try {
+        //     const statusLines = buildStatusChangeLines(lines)
+        //     if (statusLines.length > 0) {
+        //         handleStatusChange(statusLines, memo)
+        //     } else {
+        //         log.debug({ title: 'No status change lines for batch', details: JSON.stringify(soLabels) })
+        //     }
+        // } catch (e) {
+        //     log.error({
+        //         title: 'Consolidated status change failed - fulfillments will NOT be created',
+        //         details: e.message || String(e)
+        //     })
+        //     return
+        // }
 
-        // Step 2: ONE consolidated bin transfer for all SOs
-        try {
-            const binLines = buildBinTransferLines(lines)
-            if (binLines.length > 0) {
-                handleBinTransfer(binLines, soTranIds)
-            } else {
-                log.audit({ title: 'No bin transfer lines for batch', details: JSON.stringify(soTranIds) })
-            }
-        } catch (e) {
-            log.error({
-                title: 'Consolidated bin transfer failed — fulfillments will NOT be created',
-                details: e.message || String(e)
-            })
-            return
-        }
-
-        // Step 3 & 4: perSO stage updates then fulfillments
+        // Step 3 & 4: per-SO fulfillments then stage saves
         const bySOId = {}
         lines.forEach(line => {
             const soId = Number(line.soId)
@@ -376,9 +386,13 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         for (const [soIdStr, soLines] of Object.entries(bySOId)) {
             const soId = Number(soIdStr)
             try {
-                const selectedQtyByLineKey = buildItemStages(soId, soLines)
+                const { selectedQtyByLineKey, rec, hasSoChanges } = buildItemStages(soId, soLines, true)
                 if (selectedQtyByLineKey && Object.keys(selectedQtyByLineKey).length) {
                     createPackedFulfillment(soId, selectedQtyByLineKey)
+                }
+                if (hasSoChanges) {
+                    rec.save()
+                    log.debug({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
                 }
             } catch (e) {
                 log.error({
@@ -389,10 +403,10 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
     }
 
-    function buildItemStages(soId, lines) {
+    function buildItemStages(soId, lines, skipSave) {
         if (!soId) {
             log.error({ title: 'Invalid SO id in handleQCRelease', details: soId })
-            return
+            return { selectedQtyByLineKey: {}, rec: null, hasSoChanges: false }
         }
 
         const rec = record.load({
@@ -478,15 +492,15 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             hasSoChanges = true
         })
 
-        if (hasSoChanges) {
+        if (hasSoChanges && !skipSave) {
             rec.save()
-            log.audit({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
+            log.debug({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
         }
 
-        return selectedQtyByLineKey
+        return { selectedQtyByLineKey, rec, hasSoChanges }
     }
 
-    function buildBinTransferLines(lines) {
+    function buildStatusChangeLines(lines) {
         const aggregated = {}
 
         lines.forEach(({ item, itemType, confirmQty }) => {
@@ -510,9 +524,9 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             }
 
             components.forEach(({ item: compId, qty: compQty }) => {
-                const key = [compId, WHRBIN, WHSBIN, HOLD_STATUS, QC_STATUS].join('|')
+                const key = [compId, WHRBIN, HOLD_STATUS, QC_STATUS].join('|')
                 if (!aggregated[key]) {
-                    aggregated[key] = { item: compId, qty: 0, fromBin: WHRBIN, toBin: WHSBIN, fromStatus: HOLD_STATUS, toStatus: QC_STATUS }
+                    aggregated[key] = { item: compId, qty: 0, bin: WHRBIN, fromStatus: HOLD_STATUS, toStatus: QC_STATUS }
                 }
                 aggregated[key].qty += compQty
             })
@@ -570,7 +584,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     function createPackedFulfillment(soId, selectedQtyByLineKey) {
         const selectedLineKeys = Object.keys(selectedQtyByLineKey)
         if (!selectedLineKeys.length) {
-            log.audit({
+            log.debug({
                 title: 'No selected lines for fulfillment',
                 details: `SO ${soId}`
             })
@@ -643,7 +657,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         if (!hasFulfillmentLines) {
-            log.audit({
+            log.debug({
                 title: 'No valid fulfillment quantities',
                 details: `SO ${soId}`
             })
@@ -654,46 +668,10 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             ignoreMandatoryFields: true
         })
 
-        log.audit({
+        log.debug({
             title: 'Packed fulfillment created',
             details: `SO ${soId} IF ${fulfillmentId}`
         })
-    }
-
-    function handleConsolidatedBinTransfer(lines) {
-        if (!lines.length) return
-
-        const aggregated = {}
-
-        lines.forEach(line => {
-            const item = Number(line.item)
-            const qty = Number(line.qty) || 0
-            const fromBin = Number(line.fromBin || WHRBIN)
-            const toBin = Number(line.toBin || WHSBIN)
-            const fromStatus = Number(line.fromStatus || HOLD_STATUS)
-            const toStatus = Number(line.toStatus || QC_STATUS)
-
-            if (!item || qty <= 0) return
-
-            const key = [item, fromBin, toBin, fromStatus, toStatus].join('|')
-            if (!aggregated[key]) {
-                aggregated[key] = {
-                    item,
-                    qty: 0,
-                    fromBin,
-                    toBin,
-                    fromStatus,
-                    toStatus
-                }
-            }
-
-            aggregated[key].qty += qty
-        })
-
-        const transferLines = Object.keys(aggregated).map(key => aggregated[key])
-        if (!transferLines.length) return
-
-        handleBinTransfer(transferLines)
     }
 
     function buildLineKeyToIndexMap(rec) {
@@ -726,7 +704,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             return true
         })
 
-        log.audit({
+        log.debug({
             title: 'MR finished',
             details: `Usage ${summary.usage}, Yields ${summary.yields}, Concurrency ${summary.concurrency}`
         })
