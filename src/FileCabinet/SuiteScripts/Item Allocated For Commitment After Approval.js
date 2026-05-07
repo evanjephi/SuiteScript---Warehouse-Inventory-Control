@@ -12,200 +12,38 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
     function getInputData() {
         const script = runtime.getCurrentScript()
-        const datasoid = script.getParameter({ name: 'custscript_datasoid' }) || 145003
+        const soId = Number(script.getParameter({ name: 'custscript_datasoid' }))
 
-        if (!datasoid) {
+        if (!soId) {
             log.error({
-                title: 'Missing data',
-                details: 'custscript_datasoid is empty'
+                title: 'Missing data'
             })
             return
         }
-
-        const salesOrder = search.create({
-            type: 'salesorder',
-            filters: [
-                ['internalid', 'anyof', datasoid],
-                'AND',
-                ['mainline', 'is', 'F'],
-                'AND',
-                ['location', 'anyof', LOCATION],
-                'AND',
-                ['ordertype', 'anyof', ORDERTYPE],
-                'AND',
-                ['item.type', 'anyof', ['InvtPart', 'Kit']],
-                'AND',
-                ['taxline', 'is', 'F'],
-                'AND',
-                ['status', 'anyof', [
-                    'SalesOrd:D',
-                    'SalesOrd:E',
-                    'SalesOrd:B',
-                    'SalesOrd:F'
-                ]]
-            ],
-            columns: [
-                'internalid',
-                'tranid',
-                'status',
-                'item',
-                'quantity',
-                'quantityuom',
-                'quantitycommitted',
-                'commitinventory',
-                'quantityshiprecv',
-                'custbody_release_order',
-                'custcol_release_order',
-                { name: 'lineuniquekey' },
-                'custcol_qty_prepared',
-                'custcol_prep_stage',
-                search.createColumn({
-                    name: 'type', join: 'item'
-                }),
-            ]
-        })
-
-        const soContent = {}
-        salesOrder.run().each(s => {
-            const soid = Number(s.getValue('internalid'))
-            const tranid = s.getValue('tranid')
-            const status = s.getText('status')
-            const item = s.getText('item')
-            const itemId = s.getValue('item')
-            const prepStage = s.getValue('custcol_prep_stage') || ''
-            const isStage = String(prepStage).toLowerCase() === 'prepared' || String(prepStage).toLowerCase() === 'partial'
-            const qtyOrder = Number(s.getValue('quantity')) || 0
-            const qtyfulf = Number(s.getValue('quantityshiprecv')) || 0
-            const qtycomm = Number(s.getValue('quantitycommitted')) || 0
-            const commitInventory = Number(s.getValue('commitinventory')) || 0
-            const isMainRelease = s.getValue('custbody_release_order')
-            const isLineRelease = s.getValue('custcol_release_order')
-            const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
-
-            if (!isMainRelease) return true
-            if (!isStage) return true
-            if (item && qtyfulf >= 0 && qtyfulf < qtyOrder) {
-                if (!isLineRelease) return true
-                if (!soContent[tranid]) {
-                    soContent[tranid] = {
-                        id: soid,
-                        status: status,
-                        items: []
-                    }
-                }
-
-                soContent[tranid].items.push({
-                    item,
-                    itemId,
-                    qtyOrder,
-                    qtyfulf,
-                    qtycomm,
-                    qtyPrepared,
-                    commitInventory
-                })
-            }
-
-            return true
-        })
-        log.debug({ title: 'SO content', details: JSON.stringify(soContent) })
-        return Object.entries(soContent)
+        return [soId]
     }
 
     function map(context) {
-        const line = JSON.parse(context.value)
-        log.debug({ title: 'Map input', details: JSON.stringify(line) })
+        const soId = Number(JSON.parse(context.value))
+        if (!soId) return
+
+        context.write({
+            key: String(soId),
+            value: JSON.stringify({ soId })
+        })
     }
 
     function reduce(context) {
-        const lines = context.values.map(v => JSON.parse(v))
-        log.debug({ title: 'Reduce input', details: JSON.stringify(lines) })
-    }
+        const soId = Number(context.key)
+        if (!soId) return
 
-
-    function handleBinTransfer(lines, soLabels) {
-        const transfer = record.create({
-            type: record.Type.BIN_TRANSFER,
-            isDynamic: true
+        log.debug({
+            title: 'Reduce SO',
+            details: `SO ${soId}`
         })
 
-        transfer.setValue({ fieldId: 'location', value: LOCATION })
-        transfer.setValue({ fieldId: 'transferlocation', value: LOCATION })
-
-        if (soLabels && soLabels.length) {
-            const memo = 'Items made available for ' + soLabels.join(' and ')
-            transfer.setValue({ fieldId: 'memo', value: memo })
-        }
-
-        lines.forEach(line => {
-
-            const item = Number(line.item)
-            const qty = Number(line.qty)
-            if (!item || qty <= 0) return
-
-            const fromBin = Number(line.fromBin || WHSBIN)
-            const toBin = Number(line.toBin || WHRBIN)
-            const fromStatus = Number(line.fromStatus || GOOD_STATUS)
-            const toStatus = Number(line.toStatus || HOLD_STATUS)
-
-            transfer.selectNewLine({ sublistId: 'inventory' })
-
-            transfer.setCurrentSublistValue({
-                sublistId: 'inventory',
-                fieldId: 'item',
-                value: item
-            })
-
-            transfer.setCurrentSublistValue({
-                sublistId: 'inventory',
-                fieldId: 'quantity',
-                value: qty
-            })
-
-            const invDetail = transfer.getCurrentSublistSubrecord({
-                sublistId: 'inventory',
-                fieldId: 'inventorydetail'
-            })
-
-            invDetail.selectNewLine({ sublistId: 'inventoryassignment' })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'binnumber',
-                value: fromBin
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'inventorystatus',
-                value: fromStatus
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'tobinnumber',
-                value: toBin
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'toinventorystatus',
-                value: toStatus
-            })
-
-            invDetail.setCurrentSublistValue({
-                sublistId: 'inventoryassignment',
-                fieldId: 'quantity',
-                value: qty
-            })
-
-            invDetail.commitLine({ sublistId: 'inventoryassignment' })
-            transfer.commitLine({ sublistId: 'inventory' })
-        })
-
-        const transferId = transfer.save()
-        log.debug({ title: 'Bin transfer created', details: `ID ${transferId}` })
+        handleConsolidatedQCRelease(soId)
     }
-
 
     function handleStatusChange(lines, memoText) {
 
@@ -279,218 +117,143 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         log.debug({ title: 'Inventory status change created', details: `ID ${statusChangeId}` })
     }
 
-    /*   function handleQCRelease(soId, lines) {
-          // Step 1 status change first (HOLD > QC), expanding kits to components
-          try {
-              const statusLines = buildStatusChangeLines(lines)
-              if (statusLines.length > 0) {
-                  handleStatusChange(statusLines)
-              } else {
-                  log.debug({ title: 'No status change lines', details: `SO ${soId} - all items may be non-inventory` })
-              }
-          } catch (e) {
-              log.error({
-                  title: `Status change failed for SO ${soId} - fulfillment will NOT be created`,
-                  details: e.message || String(e)
-              })
-              return
-          }
-  
-          // Step 2 get selected qty map
-          const { selectedQtyByLineKey, rec, hasSoChanges } = buildItemStages(soId, lines, true)
-  
-          // Step 3 fulfillment
-          createPackedFulfillment(soId, selectedQtyByLineKey)
-  
-          // Step 4 save SO staged fields
-          if (hasSoChanges) {
-              rec.save()
-              log.debug({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
-          }
-      }
-   */
+    function handleConsolidatedQCRelease(soId) {
+        const salesOrder = record.load({
+            type: record.Type.SALES_ORDER,
+            id: soId,
+            isDynamic: false
+        })
 
-    function handleConsolidatedQCRelease(lines) {
-        // Step 1: look up SO transaction numbers for memo
-        const soIdList = [...new Set(lines.map(l => Number(l.soId)).filter(Boolean))]
-        const soTranIds = {}
-        try {
-            search.create({
-                type: record.Type.SALES_ORDER,
-                filters: [['internalid', 'anyof', soIdList]],
-                columns: ['tranid']
-            }).run().each(r => {
-                soTranIds[r.id] = r.getValue('tranid')
-                return true
-            })
-        } catch (e) {
-            log.error({ title: 'Failed to look up SO tranids', details: e.message || String(e) })
+        const tranId = String(salesOrder.getValue({ fieldId: 'tranid' }) || ('SO' + soId))
+        const orderType = Number(salesOrder.getValue({ fieldId: 'ordertype' })) || 0
+        if (orderType !== ORDERTYPE) {
+            log.debug({ title: 'Skipping SO by order type', details: `SO ${soId} ordertype ${orderType}` })
+            return
         }
 
-        const soLabels = soIdList.map(id => String(soTranIds[String(id)] || ('SO' + id)))
-        const memo = soLabels.length ? ('Items made available for ' + soLabels.join(', ')) : ''
-        // Step 2: ONE consolidated inventory status change for all SOs
+        const items = collectEligibleSoItems(salesOrder)
+        if (!items.length) {
+            log.debug({ title: 'No eligible items for SO', details: `SO ${soId}` })
+            return
+        }
+
+        const memo = 'Items made available for ' + tranId
+
+        // Step 1: consolidated inventory status change for eligible items
         try {
-            const statusLines = buildStatusChangeLines(lines)
+            const statusLines = buildStatusChangeLines(items)
             if (statusLines.length > 0) {
                 handleStatusChange(statusLines, memo)
             } else {
-                log.debug({ title: 'No status change lines for batch', details: JSON.stringify(soLabels) })
+                log.debug({ title: 'No status change lines for SO', details: `SO ${soId}` })
             }
         } catch (e) {
             log.error({
-                title: 'Consolidated status change failed - fulfillments will NOT be created',
+                title: `Status change failed for SO ${soId} - fulfillment will NOT be created`,
                 details: e.message || String(e)
             })
             return
         }
 
-        // Step 3 & 4: per-SO fulfillments then stage saves
-        const bySOId = {}
-        lines.forEach(line => {
-            const soId = Number(line.soId)
-            if (!bySOId[soId]) bySOId[soId] = []
-            bySOId[soId].push(line)
-        })
-
-        for (const [soIdStr, soLines] of Object.entries(bySOId)) {
-            const soId = Number(soIdStr)
-            try {
-                const { selectedQtyByLineKey, rec, hasSoChanges } = buildItemStages(soId, soLines, true)
-                if (selectedQtyByLineKey && Object.keys(selectedQtyByLineKey).length) {
-                    createPackedFulfillment(soId, selectedQtyByLineKey)
-                }
-                if (hasSoChanges) {
-                    rec.save()
-                    log.debug({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
-                }
-            } catch (e) {
-                log.error({
-                    title: `Failed to process SO ${soId}`,
-                    details: e.message || String(e)
-                })
-            }
+        // Step 2: set SO lines to Available Qty commit mode and save SO
+        try {
+            updateSoCommitInventory(salesOrder, items)
+        } catch (e) {
+            log.error({
+                title: `Failed to update commit inventory for SO ${soId}`,
+                details: e.message || String(e)
+            })
+            return
         }
+
+        // Step 3: create item fulfillment for the SO
+       // createPackedFulfillment(soId, items)
     }
 
-    function buildItemStages(soId, lines, skipSave) {
-        if (!soId) {
-            log.error({ title: 'Invalid SO id in handleQCRelease', details: soId })
-            return { selectedQtyByLineKey: {}, rec: null, hasSoChanges: false }
+    function collectEligibleSoItems(salesOrder) {
+        const items = []
+        const lineCount = salesOrder.getLineCount({ sublistId: 'item' }) || 0
+
+        for (let i = 0; i < lineCount; i++) {
+            const itemType = String(salesOrder.getSublistValue({
+                sublistId: 'item',
+                fieldId: 'itemtype',
+                line: i
+            }) || '')
+
+            if (itemType !== 'InvtPart' && itemType !== 'Kit') continue
+
+            const itemId = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'item', line: i })) || 0
+            const itemText = salesOrder.getSublistText({ sublistId: 'item', fieldId: 'item', line: i }) || ''
+            const qtyOrder = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantity', line: i })) || 0
+            const qtyFulfilled = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantityshiprecv', line: i })) || 0
+            const qtyCommitted = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantitycommitted', line: i })) || 0
+            const commitInventory = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'commitinventory', line: i })
+            const lineUniqueKey = String(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'lineuniquekey', line: i }) || '')
+            const qtyRemaining = Math.max(qtyOrder - qtyFulfilled, 0)
+
+            if (!itemId || !itemText || qtyRemaining <= 0 || !lineUniqueKey) continue
+
+            items.push({
+                item: itemText,
+                itemId,
+                itemType,
+                qtyOrder,
+                qtyFulfilled,
+                qtyCommitted,
+                qtyRemaining,
+                commitInventory,
+                lineUniqueKey
+            })
         }
 
-        const rec = record.load({
-            type: record.Type.SALES_ORDER,
-            id: soId
-        })
+        return items
+    }
 
-        const lineKeyToIndex = buildLineKeyToIndexMap(rec)
-        const selectedQtyByLineKey = {}
-        let hasSoChanges = false
+    function updateSoCommitInventory(salesOrder, items) {
+        const lineKeyToIndex = buildLineKeyToIndexMap(salesOrder)
+        let hasChanges = false
 
-        lines.forEach(({ lineIndex, confirmQty }) => {
-            const lineUniqueKey = String(lineIndex)
-            const index = lineKeyToIndex[lineUniqueKey]
-            const qtyToAdd = Number(confirmQty) || 0
+        items.forEach(({ lineUniqueKey }) => {
+            const index = lineKeyToIndex[String(lineUniqueKey)]
+            if (index === undefined) return
 
-            if (index === undefined || qtyToAdd <= 0) {
-                log.error({
-                    title: 'QC line not resolved',
-                    details: `[SO ${soId} lineUniqueKey ${lineUniqueKey} confirmQty ${confirmQty}]`
-                })
-                return
-            }
-
-            const orderedQty = Number(rec.getSublistValue({
-                sublistId: 'item',
-                fieldId: 'quantity',
-                line: index
-            })) || 0
-
-            const alreadyPrepared = Number(rec.getSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_qty_prepared',
-                line: index
-            })) || 0
-
-            const ro = rec.getSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_release_order',
-                line: index
-            })
-
-            if (ro === false) return
-
-            const remainingToPrepare = Math.max(orderedQty - alreadyPrepared, 0)
-            const appliedQty = Math.min(qtyToAdd, remainingToPrepare)
-            if (appliedQty <= 0) return
-
-            const finalPreparedQty = alreadyPrepared + appliedQty
-
-            let stage = 'pending'
-            if (finalPreparedQty > 0 && finalPreparedQty < orderedQty) stage = 'partial'
-            if (orderedQty > 0 && finalPreparedQty >= orderedQty) stage = 'prepared'
-
-            selectedQtyByLineKey[lineUniqueKey] = (selectedQtyByLineKey[lineUniqueKey] || 0) + appliedQty
-
-            rec.setSublistValue({
+            salesOrder.setSublistValue({
                 sublistId: 'item',
                 fieldId: 'commitinventory',
-                value: 1,
-                line: index
-            })
-
-            rec.setSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_qty_prepared',
                 line: index,
-                value: finalPreparedQty
+                value: 1
             })
-
-            rec.setSublistValue({
-                sublistId: 'item',
-                fieldId: 'custcol_prep_stage',
-                line: index,
-                value: stage
-            })
-
-            log.debug({
-                title: 'QC line updated',
-                details: `[SO ${soId} key ${lineUniqueKey} idx ${index} ordered ${orderedQty} applied ${appliedQty} newPrepared ${finalPreparedQty} stage ${stage}]`
-            })
-
-            hasSoChanges = true
+            hasChanges = true
         })
 
-        if (hasSoChanges && !skipSave) {
-            rec.save()
-            log.debug({ title: 'SO updated', details: `SO ${soId} prepared fields saved` })
+        if (hasChanges) {
+            salesOrder.save()
+            log.debug({ title: 'SO commit inventory updated', details: `SO ${salesOrder.id}` })
         }
-
-        return { selectedQtyByLineKey, rec, hasSoChanges }
     }
 
     function buildStatusChangeLines(lines) {
         const aggregated = {}
 
-        lines.forEach(({ item, itemType, confirmQty }) => {
-            const itemId = Number(item) || 0
-            const qty = Number(confirmQty) || 0
-            if (!itemId || qty <= 0) return
+        lines.forEach(({ itemId, itemType, qtyRemaining }) => {
+            const inventoryItemId = Number(itemId) || 0
+            const qty = Number(qtyRemaining) || 0
+            if (!inventoryItemId || qty <= 0) return
 
             const isKit = String(itemType || '').toLowerCase() === 'kit'
 
             let components = []
             if (isKit) {
-                components = getKitComponents(itemId, qty)
+                components = getKitComponents(inventoryItemId, qty)
                 if (!components.length) {
                     log.error({
                         title: 'Kit has no inventory components',
-                        details: `Kit item ${itemId} qty ${qty}`
+                        details: `Kit item ${inventoryItemId} qty ${qty}`
                     })
                 }
             } else {
-                components = [{ item: itemId, qty }]
+                components = [{ item: inventoryItemId, qty }]
             }
 
             components.forEach(({ item: compId, qty: compQty }) => {
@@ -505,7 +268,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         return Object.values(aggregated).filter(l => l.item && l.qty > 0)
     }
 
-    function getKitComponents(kitItemId, kitQty) {
+   function getKitComponents(kitItemId, kitQty) {
         const components = []
         try {
             search.create({
@@ -551,9 +314,9 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         return components
     }
 
-    function createPackedFulfillment(soId, selectedQtyByLineKey) {
-        const selectedLineKeys = Object.keys(selectedQtyByLineKey)
-        if (!selectedLineKeys.length) {
+    function createPackedFulfillment(soId, items) {
+        const selectedItems = Array.isArray(items) ? items.filter(item => item && item.lineUniqueKey && Number(item.qtyRemaining) > 0) : []
+        if (!selectedItems.length) {
             log.debug({
                 title: 'No selected lines for fulfillment',
                 details: `SO ${soId}`
@@ -575,6 +338,11 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         //fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today })
         fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
         const lineKeyToIndex = buildLineKeyToIndexMap(fulfillment)
+        const selectedQtyByLineKey = {}
+        selectedItems.forEach(item => {
+            selectedQtyByLineKey[String(item.lineUniqueKey)] = Number(item.qtyRemaining) || 0
+        })
+        const selectedLineKeys = Object.keys(selectedQtyByLineKey)
         let hasFulfillmentLines = false
 
         selectedLineKeys.forEach(lineKey => {
