@@ -118,14 +118,15 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     }
 
     function handleConsolidatedQCRelease(soId) {
+
         const salesOrder = record.load({
             type: record.Type.SALES_ORDER,
             id: soId,
             isDynamic: false
         })
 
-        const tranId = String(salesOrder.getValue({ fieldId: 'tranid' }) || ('SO' + soId))
-        const orderType = Number(salesOrder.getValue({ fieldId: 'ordertype' })) || 0
+        const tranId = salesOrder.getText({ fieldId: 'tranid' })
+        const orderType = Number(salesOrder.getValue({ fieldId: 'ordertype' }))
         if (orderType !== ORDERTYPE) {
             log.debug({ title: 'Skipping SO by order type', details: `SO ${soId} ordertype ${orderType}` })
             return
@@ -157,7 +158,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
         // Step 2: set SO lines to Available Qty commit mode and save SO
         try {
-            updateSoCommitInventory(salesOrder, items)
+             updateSoCommitInventory(salesOrder, items)
         } catch (e) {
             log.error({
                 title: `Failed to update commit inventory for SO ${soId}`,
@@ -167,13 +168,15 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         // Step 3: create item fulfillment for the SO
-       // createPackedFulfillment(soId, items)
+        // createPackedFulfillment(soId, items)
     }
 
     function collectEligibleSoItems(salesOrder) {
         const items = []
         const lineCount = salesOrder.getLineCount({ sublistId: 'item' }) || 0
+        const isReleased = salesOrder.getValue({ fieldId: 'custbody_buy_and_sell' })
 
+        if (!isReleased) return
         for (let i = 0; i < lineCount; i++) {
             const itemType = String(salesOrder.getSublistValue({
                 sublistId: 'item',
@@ -183,17 +186,18 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
             if (itemType !== 'InvtPart' && itemType !== 'Kit') continue
 
-            const itemId = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'item', line: i })) || 0
-            const itemText = salesOrder.getSublistText({ sublistId: 'item', fieldId: 'item', line: i }) || ''
-            const qtyOrder = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantity', line: i })) || 0
-            const qtyFulfilled = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantityshiprecv', line: i })) || 0
-            const qtyCommitted = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantitycommitted', line: i })) || 0
+            const itemId = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'item', line: i }))
+            const itemText = salesOrder.getSublistText({ sublistId: 'item', fieldId: 'item', line: i })
+            const qtyOrder = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantity', line: i }))
+            const qtyFulfilled = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantityfulfilled', line: i })
+            const qtyCommitted = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantitycommitted', line: i })
+            const qtyAvailable = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'quantityavailable', line: i })
             const commitInventory = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'commitinventory', line: i })
-            const lineUniqueKey = String(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'lineuniquekey', line: i }) || '')
+            const lineUniqueKey = String(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'lineuniquekey', line: i }))
             const qtyRemaining = Math.max(qtyOrder - qtyFulfilled, 0)
 
             if (!itemId || !itemText || qtyRemaining <= 0 || !lineUniqueKey) continue
-
+            if (qtyAvailable === qtyOrder) continue
             items.push({
                 item: itemText,
                 itemId,
@@ -237,8 +241,8 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         const aggregated = {}
 
         lines.forEach(({ itemId, itemType, qtyRemaining }) => {
-            const inventoryItemId = Number(itemId) || 0
-            const qty = Number(qtyRemaining) || 0
+            const inventoryItemId = Number(itemId)
+            const qty = Number(qtyRemaining)
             if (!inventoryItemId || qty <= 0) return
 
             const isKit = String(itemType || '').toLowerCase() === 'kit'
@@ -264,11 +268,14 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 aggregated[key].qty += compQty
             })
         })
-
+        log.debug({
+            title: 'buildStatusChangeLines',
+            details: `return: ${Object.values(aggregated).filter(l => l.item && l.qty > 0)}`
+        })
         return Object.values(aggregated).filter(l => l.item && l.qty > 0)
     }
 
-   function getKitComponents(kitItemId, kitQty) {
+    function getKitComponents(kitItemId, kitQty) {
         const components = []
         try {
             search.create({
