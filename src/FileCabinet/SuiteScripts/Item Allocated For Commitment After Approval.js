@@ -133,44 +133,42 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         const items = collectEligibleSoItems(salesOrder)
-        log.debug({ title: 'Eligible items collected for SO', 
-            details: `SO ${soId} items: ${JSON.stringify(items)}` })
         if (!items.length) {
             log.debug({ title: 'No eligible items for SO', details: `SO ${soId}` })
             return
         }
 
-/*         const memo = 'Items made available for ' + tranId
-
-        // Step 1: consolidated inventory status change for eligible items
-        try {
-            const statusLines = buildStatusChangeLines(items)
-            if (statusLines.length > 0) {
-                handleStatusChange(statusLines, memo)
-            } else {
-                log.debug({ title: 'No status change lines for SO', details: `SO ${soId}` })
-            }
-        } catch (e) {
-            log.error({
-                title: `Status change failed for SO ${soId} - fulfillment will NOT be created`,
-                details: e.message || String(e)
-            })
-            return
-        }
-
-        // Step 2: set SO lines to Available Qty commit mode and save SO
-        try {
-            //   updateSoCommitInventory(salesOrder, items)
-        } catch (e) {
-            log.error({
-                title: `Failed to update commit inventory for SO ${soId}`,
-                details: e.message || String(e)
-            })
-            return
-        } */
+        /*         const memo = 'Items made available for ' + tranId
+        
+                // Step 1: consolidated inventory status change for eligible items
+                try {
+                    const statusLines = buildStatusChangeLines(items)
+                    if (statusLines.length > 0) {
+                        handleStatusChange(statusLines, memo)
+                    } else {
+                        log.debug({ title: 'No status change lines for SO', details: `SO ${soId}` })
+                    }
+                } catch (e) {
+                    log.error({
+                        title: `Status change failed for SO ${soId} - fulfillment will NOT be created`,
+                        details: e.message || String(e)
+                    })
+                    return
+                }
+        
+                // Step 2: set SO lines to Available Qty commit mode and save SO
+                try {
+                    //   updateSoCommitInventory(salesOrder, items)
+                } catch (e) {
+                    log.error({
+                        title: `Failed to update commit inventory for SO ${soId}`,
+                        details: e.message || String(e)
+                    })
+                    return
+                } */
 
         // Step 3: create item fulfillment for the SO
-         createPackedFulfillment(soId, items)
+        createPackedFulfillment(soId, items)
     }
 
     function collectEligibleSoItems(salesOrder) {
@@ -199,7 +197,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             const qtyRemaining = Math.max(qtyOrder - qtyFulfilled, 0)
 
             if (!itemId || !itemText || qtyRemaining <= 0 || !lineUniqueKey) continue
-            if (qtyAvailable === qtyOrder) continue
+            //if (qtyAvailable === qtyOrder) continue
             items.push({
                 item: itemText,
                 itemId,
@@ -338,12 +336,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             return
         }
 
-        log.debug({
-            title: 'Create fulfillment',
-            details: `SO ${soId} items: ${JSON.stringify(selectedItems)}`
-        })
-
-/*         const fulfillment = record.transform({
+        const fulfillment = record.transform({
             fromType: record.Type.SALES_ORDER,
             fromId: soId,
             toType: record.Type.ITEM_FULFILLMENT,
@@ -355,44 +348,55 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         //fulfillment.setValue({ fieldId: 'custbody_tracking_number', value: 'TBD' })
         const today = new Date()
         //fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today })
-        fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
-        const lineKeyToIndex = buildLineKeyToIndexMap(fulfillment)
-        const selectedQtyByLineKey = {}
+        //fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
+        //const lineKeyToIndex = buildLineKeyToIndexMap(fulfillment)
+        const selectedQtyByItem = {}
         selectedItems.forEach(item => {
-            selectedQtyByLineKey[String(item.lineUniqueKey)] = Number(item.qtyRemaining) || 0
+            selectedQtyByItem[String(item.itemId)] = Number(item.qtyRemaining) 
         })
-        const selectedLineKeys = Object.keys(selectedQtyByLineKey)
+        const selectedLineKeys = Object.keys(selectedQtyByItem)
         let hasFulfillmentLines = false
 
+        log.debug({
+            title: 'Create fulfillment',
+            details: `SO ${soId} selectedLineKeys: ${JSON.stringify(selectedQtyByItem)}`
+        })
         selectedLineKeys.forEach(lineKey => {
-            const index = lineKeyToIndex[String(lineKey)]
-            const requestedQty = Number(selectedQtyByLineKey[lineKey]) || 0
-            if (index === undefined || requestedQty <= 0) return
+            //const index = lineKeyToIndex[String(lineKey)]
+            const requestedQty = Number(selectedQtyByItem[lineKey]) || 0
+            const index = fulfillment.getLineCount({ sublistId: 'item' })
+            if (requestedQty <= 0) return
 
-            const defaultQty = Number(fulfillment.getSublistValue({
-                sublistId: 'item',
-                fieldId: 'quantity',
-                line: index
-            })) || 0
+            for (let i = 0; i < index; i++) {
+                const defaultQty = Number(fulfillment.getSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'quantity',
+                    line: i
+                }))
 
-            const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
-            if (fulfillQty <= 0) return
+                log.debug('defaultQty',
+                    { defaultQty, requestedQty, lineKey }
+                )
 
-            fulfillment.setSublistValue({
-                sublistId: 'item',
-                fieldId: 'itemreceive',
-                line: index,
-                value: true
-            })
+                const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
+                if (fulfillQty <= 0) return
 
-            fulfillment.setSublistValue({
-                sublistId: 'item',
-                fieldId: 'quantity',
-                line: index,
-                value: fulfillQty
-            })
+                fulfillment.setSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'itemreceive',
+                    line: i,
+                    value: true
+                })
 
-            hasFulfillmentLines = true
+                fulfillment.setSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'quantity',
+                    line: i,
+                    value: fulfillQty
+                })
+
+                hasFulfillmentLines = true
+            }
         })
 
         const lineCount = fulfillment.getLineCount({ sublistId: 'item' }) || 0
@@ -403,7 +407,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 line: i
             }) || '')
 
-            if (!selectedQtyByLineKey[lineKey]) {
+            if (!selectedQtyByItem[lineKey]) {
                 fulfillment.setSublistValue({
                     sublistId: 'item',
                     fieldId: 'itemreceive',
@@ -421,14 +425,15 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             return
         }
 
-        const fulfillmentId = fulfillment.save({
-            ignoreMandatoryFields: true
-        })
-
-        log.debug({
-            title: 'Packed fulfillment created',
-            details: `SO ${soId} IF ${fulfillmentId}`
-        }) */
+        /*              const fulfillmentId = fulfillment.save({
+                         ignoreMandatoryFields: true
+                     }) 
+             
+                     log.debug({
+                         title: 'Packed fulfillment created',
+                         details: `SO ${soId} IF ${fulfillmentId}`
+                     }) 
+                         */
     }
 
     function buildLineKeyToIndexMap(rec) {
