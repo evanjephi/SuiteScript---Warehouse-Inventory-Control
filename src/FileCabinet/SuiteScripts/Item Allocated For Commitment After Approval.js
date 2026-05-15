@@ -133,12 +133,14 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         const items = collectEligibleSoItems(salesOrder)
+        log.debug({ title: 'Eligible items collected for SO', 
+            details: `SO ${soId} items: ${JSON.stringify(items)}` })
         if (!items.length) {
             log.debug({ title: 'No eligible items for SO', details: `SO ${soId}` })
             return
         }
 
-        const memo = 'Items made available for ' + tranId
+/*         const memo = 'Items made available for ' + tranId
 
         // Step 1: consolidated inventory status change for eligible items
         try {
@@ -158,17 +160,17 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
         // Step 2: set SO lines to Available Qty commit mode and save SO
         try {
-             updateSoCommitInventory(salesOrder, items)
+            //   updateSoCommitInventory(salesOrder, items)
         } catch (e) {
             log.error({
                 title: `Failed to update commit inventory for SO ${soId}`,
                 details: e.message || String(e)
             })
             return
-        }
+        } */
 
         // Step 3: create item fulfillment for the SO
-        // createPackedFulfillment(soId, items)
+         createPackedFulfillment(soId, items)
     }
 
     function collectEligibleSoItems(salesOrder) {
@@ -210,7 +212,6 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 lineUniqueKey
             })
         }
-
         return items
     }
 
@@ -263,7 +264,13 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             components.forEach(({ item: compId, qty: compQty }) => {
                 const key = [compId, WHRBIN, HOLD_STATUS, GOOD_STATUS].join('|')
                 if (!aggregated[key]) {
-                    aggregated[key] = { item: compId, qty: 0, bin: WHRBIN, fromStatus: HOLD_STATUS, toStatus: GOOD_STATUS }
+                    aggregated[key] = {
+                        item: compId,
+                        qty: 0,
+                        bin: WHRBIN,
+                        fromStatus: HOLD_STATUS,
+                        toStatus: GOOD_STATUS
+                    }
                 }
                 aggregated[key].qty += compQty
             })
@@ -331,7 +338,12 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             return
         }
 
-        const fulfillment = record.transform({
+        log.debug({
+            title: 'Create fulfillment',
+            details: `SO ${soId} items: ${JSON.stringify(selectedItems)}`
+        })
+
+/*         const fulfillment = record.transform({
             fromType: record.Type.SALES_ORDER,
             fromId: soId,
             toType: record.Type.ITEM_FULFILLMENT,
@@ -416,7 +428,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         log.debug({
             title: 'Packed fulfillment created',
             details: `SO ${soId} IF ${fulfillmentId}`
-        })
+        }) */
     }
 
     function buildLineKeyToIndexMap(rec) {
