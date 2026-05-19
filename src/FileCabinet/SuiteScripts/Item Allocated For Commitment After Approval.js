@@ -366,7 +366,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             const requestedQty = Number(selectedQtyByItem[lineKey]) || 0
             const index = fulfillment.getLineCount({ sublistId: 'item' })
             if (requestedQty <= 0) return
-
+            log.debug('Processing lineKey', { lineKey, requestedQty, index })
             for (let i = 0; i < index; i++) {
                 const defaultQty = Number(fulfillment.getSublistValue({
                     sublistId: 'item',
