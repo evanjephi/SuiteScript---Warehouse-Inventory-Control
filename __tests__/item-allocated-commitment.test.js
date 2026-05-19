@@ -304,7 +304,7 @@ describe('Item Allocated For Commitment After Approval', () => {
 
             expect(ifMock.setSublistValue).toHaveBeenCalledWith(
                 expect.objectContaining({ fieldId: 'quantity', line: 0, value: 5 })
-            );
-        });
-    });
-});
+            )
+        })
+    })
+})
