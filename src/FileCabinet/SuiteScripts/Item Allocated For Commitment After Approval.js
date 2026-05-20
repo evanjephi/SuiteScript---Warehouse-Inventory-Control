@@ -59,7 +59,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             statusChange.setValue({ fieldId: 'memo', value: memoText })
         }
 
-        log.debug('step 2', { title: 'Handle Status Change', details: memoText, lines: lines })
+        //log.debug('step 2', { title: 'Handle Status Change', details: memoText, lines: lines })
 
         lines.forEach((line, invLine) => {
             const item = Number(line.item)
@@ -67,7 +67,8 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             if (!item || qty <= 0) return
 
             const bin = Number(line.bin || WHRBIN)
-
+            const onhandHoldByItem = getOnhandHoldQtyByItem(item)
+            log.debug('onhandHoldByItem', { item, typeof: typeof onhandHoldByItem })
             statusChange.insertLine({
                 sublistId: 'inventory',
                 line: invLine
@@ -78,6 +79,11 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 fieldId: 'item',
                 line: invLine,
                 value: item
+            })
+
+            if (onhandHoldByItem < qty) return log.error({
+                title: 'Not enough on hand for this item',
+                details: `Item ${item} has ${onhandHoldByItem} on hand, but ${qty} is required`
             })
 
             statusChange.setSublistValue({
@@ -351,12 +357,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             })
 
             fulfillment.setValue({ fieldId: 'shipstatus', value: 'B' })
-            //fulfillment.setValue({ fieldId: 'custbody_viso_shipping_carrier', value: 1 })
-            //fulfillment.setValue({ fieldId: 'custbody_tracking_number', value: 'TBD' })
             const today = new Date()
-            //fulfillment.setValue({ fieldId: 'custbody_ship_delivery_date', value: today })
-            //fulfillment.setValue({ fieldId: 'custbody_packaged_on', value: today })
-            //const lineItemToIndex = buildlineItemToIndexMap(fulfillment)
             const selectedQtyByItem = {}
             selectedItems.forEach(item => {
                 selectedQtyByItem[String(item.itemId)] = Number(item.qtyRemaining)
@@ -406,6 +407,40 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                         line: i,
                         value: fulfillQty
                     })
+
+                    const invdetail = fulfillment.getSublistSubrecord({
+                        sublistId: 'item',
+                        fieldId: 'inventorydetail',
+                        line: i
+                    })
+                    const line = invdetail.getLineCount({
+                        sublistId: 'inventoryassignment'
+                    })
+                    log.debug('line-count', line)
+                    for (let j = 0; j < line; j++) {
+                        invdetail.setSublistValue({
+                            sublistId: 'inventoryassignment',
+                            fieldId: 'binnumber',
+                            value: 301,
+                            line: j
+                        });
+
+                        invdetail.setSublistValue({
+                            sublistId: 'inventoryassignment',
+                            fieldId: 'inventorystatus',
+                            value: 4,
+                            line: j
+                        });
+
+                        if (line === 1) {
+                            invdetail.setSublistValue({
+                                sublistId: 'inventoryassignment',
+                                fieldId: 'quantity',
+                                value: fulfillQty,
+                                line: j
+                            });
+                        }
+                    }
 
                     hasFulfillmentLines = true
                 }
@@ -457,6 +492,38 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
 
         return map
+    }
+
+    function getOnhandHoldQtyByItem(requestedItem) {
+        let holdQty = 0
+
+        search.create({
+            type: 'inventorybalance',
+            filters: [
+                ['item', 'anyof', requestedItem],
+                'AND',
+                ['location', 'anyof', LOCATION],
+                'AND',
+                ['binnumber', 'anyof', WHRBIN],
+                'AND',
+                ['status', 'anyof', HOLD_STATUS]
+            ],
+            columns: [
+                search.createColumn({ name: 'item' }),
+                search.createColumn({ name: 'binnumber' }),
+                search.createColumn({ name: 'status' }),
+                search.createColumn({ name: 'available' }),
+                search.createColumn({ name: 'onhand' })
+            ]
+        }).run().each(r => {
+            const available = Number(r.getValue({ name: 'available' }))
+            const onHand = Number(r.getValue({ name: 'onhand' }))
+            holdQty = onHand
+
+            return true
+        })
+
+        return holdQty
     }
 
     function summarize(summary) {
