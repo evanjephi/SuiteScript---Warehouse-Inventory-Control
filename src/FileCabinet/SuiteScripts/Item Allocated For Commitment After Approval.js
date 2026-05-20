@@ -68,7 +68,10 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
             const bin = Number(line.bin || WHRBIN)
             const onhandHoldByItem = getOnhandHoldQtyByItem(item)
-            log.debug('onhandHoldByItem', { item, typeof: typeof onhandHoldByItem })
+            log.debug('onhandHoldByItem', { item, onhandHoldByItem: onhandHoldByItem })
+            
+            if (onhandHoldByItem[GOOD_STATUS] >= qty) return
+
             statusChange.insertLine({
                 sublistId: 'inventory',
                 line: invLine
@@ -81,7 +84,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 value: item
             })
 
-            if (onhandHoldByItem < qty) return log.error({
+            if (onhandHoldByItem[HOLD_STATUS] < qty) return log.error({
                 title: 'Not enough on hand for this item',
                 details: `Item ${item} has ${onhandHoldByItem} on hand, but ${qty} is required`
             })
@@ -119,8 +122,8 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             })
         })
 
-        const statusChangeId = statusChange.save()
-        log.debug({ title: 'Inventory status change created', details: `ID ${statusChangeId}` })
+       const statusChangeId = statusChange.save()
+       log.debug({ title: 'Inventory status change created', details: `ID ${statusChangeId}` })
     }
 
     function handleConsolidatedQCRelease(soId) {
@@ -495,7 +498,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     }
 
     function getOnhandHoldQtyByItem(requestedItem) {
-        let holdQty = 0
+        let itemStatusQty = {}
 
         search.create({
             type: 'inventorybalance',
@@ -506,7 +509,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 'AND',
                 ['binnumber', 'anyof', WHRBIN],
                 'AND',
-                ['status', 'anyof', HOLD_STATUS]
+                ['status', 'anyof', [HOLD_STATUS, GOOD_STATUS]]
             ],
             columns: [
                 search.createColumn({ name: 'item' }),
@@ -516,14 +519,14 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 search.createColumn({ name: 'onhand' })
             ]
         }).run().each(r => {
-            const available = Number(r.getValue({ name: 'available' }))
+            const status = Number(r.getValue({ name: 'status' }))
             const onHand = Number(r.getValue({ name: 'onhand' }))
-            holdQty = onHand
+            itemStatusQty[status] = onHand
 
             return true
         })
 
-        return holdQty
+        return itemStatusQty
     }
 
     function summarize(summary) {
