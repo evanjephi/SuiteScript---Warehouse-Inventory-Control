@@ -318,7 +318,6 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         const components = []
         const kitKey = String(kitItemId)
         const memberData = {}
-
         memberData[kitKey] = []
         try {
             search.create({
@@ -356,10 +355,6 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     }
                 }
                 return true
-            })
-            log.debug({
-                title: 'Kit components resolved',
-                details: `Kit ${kitItemId} x${kitQty}: ${JSON.stringify(components)}`
             })
         } catch (e) {
             log.error({
@@ -423,17 +418,23 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                         fieldId: 'item',
                         line: i
                     }))
-                    let components = []
+                    let eligibleComps = {}
                     if (itemtype === 'Kit') {
                         const comp = getKitComponents(ifItem, requestedQty)
-                        components = comp.memberData
+                        let components = comp.memberData
 
-                        log.debug({
-                            title: 'Fulfillment map kit',
-                            details: `Line ${i} item ${ifItem} memberData: ${JSON.stringify(components)}`
-                        })
+                        const exComps = Object.values(components).flat().filter(c => c && c.itemId && Number(c.qty) > 0)
+                        log.debug('memberData components', JSON.stringify(components) + ' exComps: ' + JSON.stringify(exComps))
+
                     }
-                    //if (ifItem !== lineItem) continue
+
+
+                    // components.forEach(({ exItemId, exQty }) => {
+                    //     if (ifItem === exItemId) { 
+
+                    //     }
+                    // })
+                    if (ifItem !== lineItem || ifItem !== exItemId) continue
 
                     const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
                     log.debug('ifItem output', {
