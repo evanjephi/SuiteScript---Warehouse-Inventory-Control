@@ -387,7 +387,19 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             const today = new Date()
             const selectedQtyByItem = {}
             selectedItems.forEach(item => {
-                selectedQtyByItem[String(item.itemId)] = Number(item.qtyRemaining)
+
+                if (item.itemType === 'Kit') {
+                    const comp = getKitComponents(item.itemId, requestedQty)
+                    let components = comp.memberData
+
+                    const exComps = Object.values(components).flat().filter(c => c && c.itemId && Number(c.qty) > 0)
+                    selectedQtyByItem = exComps.reduce((acc, c) => {
+                        acc[String(c.itemId)] = [Number(c.qty), item.itemType]
+                        return acc
+                    }, {})
+                } else {
+                    selectedQtyByItem[String(item.itemId)] = [Number(item.qtyRemaining), item.itemType]
+                }
             })
             const selectedLineItem = Object.keys(selectedQtyByItem)
             let hasFulfillmentLines = false
@@ -397,7 +409,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 details: `SO ${soId} selectedLineItem: ${JSON.stringify(selectedQtyByItem)}`
             })
             selectedLineItem.forEach(lineItem => {
-                const requestedQty = Number(selectedQtyByItem[lineItem])
+                const [requestedQty, requestedItemType] = selectedQtyByItem[lineItem]
                 const index = fulfillment.getLineCount({ sublistId: 'item' })
 
                 if (requestedQty <= 0) return
@@ -418,8 +430,9 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                         fieldId: 'item',
                         line: i
                     }))
+
                     let eligibleComps = {}
-                    if (itemtype === 'Kit') {
+                    if ((itemtype && requestedItemType) == 'Kit' && ifItem == lineItem) {
                         log.debug('eligibility check', { eligibleComps, ifItem, lineItem, requestedQty })
 
                         const comp = getKitComponents(lineItem, requestedQty)
@@ -437,17 +450,10 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
                     //     }
                     // })
-                    if (ifItem !== lineItem || ifItem !== exItemId) continue
 
                     const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
-                    log.debug('ifItem output', {
-                        ifItem, lineItem, fulfillQty
-                    })
+
                     if (fulfillQty <= 0) return
-                    if (itemtype === 'Kit') continue
-                    log.debug('Processing fulfillment line', {
-                        ifItem, lineItem, requestedQty, defaultQty, i
-                    })
                     fulfillment.setSublistValue({
                         sublistId: 'item',
                         fieldId: 'itemreceive',
@@ -463,14 +469,6 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     })
 
                     hasFulfillmentLines = true
-
-                    log.debug('Set fulfillment qty value', {
-                        line: ifItem, fulfillQty: fulfillment.getSublistValue({
-                            sublistId: 'item',
-                            fieldId: 'quantity',
-                            line: i
-                        })
-                    })
 
                     const invdetail = fulfillment.getSublistSubrecord({
                         sublistId: 'item',
