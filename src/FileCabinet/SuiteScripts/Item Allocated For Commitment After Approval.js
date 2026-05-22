@@ -385,28 +385,48 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
             fulfillment.setValue({ fieldId: 'shipstatus', value: 'B' })
             const today = new Date()
-            const selectedQtyByItem = {}
-            selectedItems.forEach(item => {
+            const selectedPlan = selectedItems.reduce((acc, item) => {
+                const qty = Number(item.qtyRemaining) || 0
+                if (qty <= 0) return acc
 
                 if (item.itemType === 'Kit') {
-                    const comp = getKitComponents(item.itemId, requestedQty)
-                    let components = comp.memberData
+                    const kitKey = String(item.itemId)
+                    if (!acc.kits[kitKey]) {
+                        acc.kits[kitKey] = {
+                            kitItemId: String(item.itemId),
+                            kitQty: 0,
+                            components: {}
+                        }
+                    }
 
-                    const exComps = Object.values(components).flat().filter(c => c && c.itemId && Number(c.qty) > 0)
-                    selectedQtyByItem = exComps.reduce((acc, c) => {
-                        acc[String(c.itemId)] = [Number(c.qty), item.itemType]
-                        return acc
-                    }, {})
+                    acc.kits[kitKey].kitQty += qty
+
+                    const comp = getKitComponents(item.itemId, qty)
+                    const exComps = Object.values(comp.memberData)
+                        .flat()
+                        .filter(c => c && c.itemId && Number(c.qty) > 0)
+
+                    exComps.forEach(c => {
+                        const compId = String(c.itemId)
+                        const compQty = Number(c.qty) || 0
+                        if (compQty <= 0) return
+                        acc.kits[kitKey].components[compId] =
+                            (acc.kits[kitKey].components[compId] || 0) + compQty
+                    })
                 } else {
-                    selectedQtyByItem[String(item.itemId)] = [Number(item.qtyRemaining), item.itemType]
+                    const itemKey = String(item.itemId)
+                    acc.direct[itemKey] = (acc.direct[itemKey] || 0) + qty
                 }
-            })
-            const selectedLineItem = Object.keys(selectedQtyByItem)
+
+                return acc
+            }, { direct: {}, kits: {} })
+
+            const selectedLineItem = Object.keys(selectedPlan)
             let hasFulfillmentLines = false
 
             log.debug({
                 title: 'Create fulfillment',
-                details: `SO ${soId} selectedLineItem: ${JSON.stringify(selectedQtyByItem)}`
+                details: `SO ${soId} - selectedPlan: ${JSON.stringify(selectedPlan)} Keys: ${JSON.stringify(selectedLineItem)}`
             })
             selectedLineItem.forEach(lineItem => {
                 const [requestedQty, requestedItemType] = selectedQtyByItem[lineItem]
