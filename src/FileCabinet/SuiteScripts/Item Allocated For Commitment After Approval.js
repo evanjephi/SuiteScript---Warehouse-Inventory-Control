@@ -421,18 +421,28 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 return acc
             }, { direct: {}, kits: {} })
 
-            const selectedLineItem = Object.keys(selectedPlan)
+            const selectedLineItem = Object.entries(selectedPlan)
             let hasFulfillmentLines = false
 
-            log.debug({
-                title: 'Create fulfillment',
-                details: `SO ${soId} - selectedPlan: ${JSON.stringify(selectedPlan)} Keys: ${JSON.stringify(selectedLineItem)}`
-            })
-            selectedLineItem.forEach(lineItem => {
-                const [requestedQty, requestedItemType] = selectedQtyByItem[lineItem]
+
+            selectedLineItem.forEach(([lineItem, lineData]) => {
+                let requestedItemId = null
+                let requestedQty = 0
+                log.debug({
+                    title: 'Create fulfillment',
+                    details: `lineItem: ${JSON.stringify(lineItem)}, lineData: ${JSON.stringify(lineData)}`
+                })
+                if (lineItem === 'kits') {
+                    Object.entries(lineData).forEach(([linekey, linedata]) => {
+                        // kitKey = 53771
+                        // kitData.kitQty = 10
+                        // kitData.components = { 927: 10, 930: 10 }
+                        
+                    })
+                }
                 const index = fulfillment.getLineCount({ sublistId: 'item' })
 
-                if (requestedQty <= 0) return
+                //if (requestedQty <= 0) return
                 for (let i = 0; i < index; i++) {
                     const itemtype = fulfillment.getSublistValue({
                         sublistId: 'item',
@@ -451,93 +461,79 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                         line: i
                     }))
 
-                    let eligibleComps = {}
-                    if ((itemtype && requestedItemType) == 'Kit' && ifItem == lineItem) {
-                        log.debug('eligibility check', { eligibleComps, ifItem, lineItem, requestedQty })
+                    const components = itemtype === 'Kit' ? kits[ifItem]?.components : direct[ifItem]
+                    log.debug({
+                        title: 'components check',
+                        details: `line ${i} item ${ifItem} type ${itemtype} components ${JSON.stringify(components)}`
+                    })
 
-                        const comp = getKitComponents(lineItem, requestedQty)
-                        let components = comp.memberData
+                    // const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
 
-                        const exComps = Object.values(components).flat().filter(c => c && c.itemId && Number(c.qty) > 0)
-                        eligibleComps = exComps.reduce((acc, c) => {
-                            acc[String(c.itemId)] = Number(c.qty)
-                            return acc
-                        }, {})
-                    }
-
-                    // components.forEach(({ exItemId, exQty }) => {
-                    //     if (ifItem === exItemId) { 
-
-                    //     }
+                    // if (fulfillQty <= 0) return
+                    // fulfillment.setSublistValue({
+                    //     sublistId: 'item',
+                    //     fieldId: 'itemreceive',
+                    //     line: i,
+                    //     value: true
                     // })
 
-                    const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
+                    // fulfillment.setSublistValue({
+                    //     sublistId: 'item',
+                    //     fieldId: 'quantity',
+                    //     line: i,
+                    //     value: fulfillQty
+                    // })
 
-                    if (fulfillQty <= 0) return
-                    fulfillment.setSublistValue({
-                        sublistId: 'item',
-                        fieldId: 'itemreceive',
-                        line: i,
-                        value: true
-                    })
+                    // hasFulfillmentLines = true
 
-                    fulfillment.setSublistValue({
-                        sublistId: 'item',
-                        fieldId: 'quantity',
-                        line: i,
-                        value: fulfillQty
-                    })
+                    // const invdetail = fulfillment.getSublistSubrecord({
+                    //     sublistId: 'item',
+                    //     fieldId: 'inventorydetail',
+                    //     line: i
+                    // })
+                    // if (!invdetail) {
+                    //     log.error({
+                    //         title: 'Missing inventory detail subrecord',
+                    //         details: `SO ${soId} line ${i} item ${ifItem} type ${itemtype}`
+                    //     })
+                    //     continue
+                    // }
 
-                    hasFulfillmentLines = true
+                    // let assignmentCount = invdetail.getLineCount({
+                    //     sublistId: 'inventoryassignment'
+                    // })
 
-                    const invdetail = fulfillment.getSublistSubrecord({
-                        sublistId: 'item',
-                        fieldId: 'inventorydetail',
-                        line: i
-                    })
-                    if (!invdetail) {
-                        log.error({
-                            title: 'Missing inventory detail subrecord',
-                            details: `SO ${soId} line ${i} item ${ifItem} type ${itemtype}`
-                        })
-                        continue
-                    }
+                    // if (assignmentCount === 0) {
+                    //     invdetail.insertLine({
+                    //         sublistId: 'inventoryassignment',
+                    //         line: 0
+                    //     })
+                    //     assignmentCount = 1
+                    // }
 
-                    let assignmentCount = invdetail.getLineCount({
-                        sublistId: 'inventoryassignment'
-                    })
+                    // for (let j = 0; j < assignmentCount; j++) {
+                    //     invdetail.setSublistValue({
+                    //         sublistId: 'inventoryassignment',
+                    //         fieldId: 'binnumber',
+                    //         value: 301,
+                    //         line: j
+                    //     })
 
-                    if (assignmentCount === 0) {
-                        invdetail.insertLine({
-                            sublistId: 'inventoryassignment',
-                            line: 0
-                        })
-                        assignmentCount = 1
-                    }
+                    //     invdetail.setSublistValue({
+                    //         sublistId: 'inventoryassignment',
+                    //         fieldId: 'inventorystatus',
+                    //         value: 4,
+                    //         line: j
+                    //     })
 
-                    for (let j = 0; j < assignmentCount; j++) {
-                        invdetail.setSublistValue({
-                            sublistId: 'inventoryassignment',
-                            fieldId: 'binnumber',
-                            value: 301,
-                            line: j
-                        })
+                    //     invdetail.setSublistValue({
+                    //         sublistId: 'inventoryassignment',
+                    //         fieldId: 'quantity',
+                    //         value: j === 0 ? fulfillQty : 0,
+                    //         line: j
+                    //     })
 
-                        invdetail.setSublistValue({
-                            sublistId: 'inventoryassignment',
-                            fieldId: 'inventorystatus',
-                            value: 4,
-                            line: j
-                        })
-
-                        invdetail.setSublistValue({
-                            sublistId: 'inventoryassignment',
-                            fieldId: 'quantity',
-                            value: j === 0 ? fulfillQty : 0,
-                            line: j
-                        })
-
-                    }
+                    // }
                 }
             })
 
