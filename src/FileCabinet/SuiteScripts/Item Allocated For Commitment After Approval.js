@@ -420,14 +420,17 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     }))
                     let eligibleComps = {}
                     if (itemtype === 'Kit') {
-                        const comp = getKitComponents(ifItem, requestedQty)
+                        log.debug('eligibility check', { eligibleComps, ifItem, lineItem, requestedQty })
+
+                        const comp = getKitComponents(lineItem, requestedQty)
                         let components = comp.memberData
 
                         const exComps = Object.values(components).flat().filter(c => c && c.itemId && Number(c.qty) > 0)
-                        log.debug('memberData components', JSON.stringify(components) + ' exComps: ' + JSON.stringify(exComps))
-
+                        eligibleComps = exComps.reduce((acc, c) => {
+                            acc[String(c.itemId)] = Number(c.qty)
+                            return acc
+                        }, {})
                     }
-
 
                     // components.forEach(({ exItemId, exQty }) => {
                     //     if (ifItem === exItemId) { 
