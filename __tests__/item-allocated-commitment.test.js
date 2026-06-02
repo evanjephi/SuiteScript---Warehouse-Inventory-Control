@@ -135,21 +135,21 @@ describe('Item Allocated For Commitment After Approval', () => {
 
             reduce({ key: '100' });
 
-            expect(record.transform).toHaveBeenCalledTimes(1);
-        });
+            expect(record.transform).toHaveBeenCalledTimes(1)
+        })
 
         it('skips a line whose itemType is not InvtPart or Kit (e.g. Service)', () => {
             record.load.mockReturnValue(makeSo({ itemtype: 'Service' }));
 
-            reduce({ key: '100' });
+            reduce({ key: '100' })
 
             expect(record.transform).not.toHaveBeenCalled();
-        });
+        })
 
         it('skips a line that is already fully fulfilled (qtyRemaining = 0)', () => {
             record.load.mockReturnValue(
                 makeSo({ quantity: 5, quantityfulfilled: 5 })
-            );
+            )
 
             reduce({ key: '100' });
 
