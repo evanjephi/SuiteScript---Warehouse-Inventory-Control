@@ -619,7 +619,9 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
     function summarize(summary) {
         summary.mapSummary.errors.iterator().each((key, error) => {
-            log.error({ title: `Map error ${key}`, details: error })
+            log.error({ 
+                title: `Map error ${key}`, details: error 
+            })
             return true
         })
 
