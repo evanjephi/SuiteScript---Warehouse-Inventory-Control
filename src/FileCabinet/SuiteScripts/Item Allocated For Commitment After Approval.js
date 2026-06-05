@@ -60,51 +60,55 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         }
         let isEligible = false
 
-        lines.forEach((line, invLine) => {
+        lines.forEach((line) => {
             const item = Number(line.item)
             const qty = Number(line.qty)
             if (!item || qty <= 0) return
 
             const bin = Number(line.bin || WHRBIN)
             const onhandHoldByItem = getOnhandHoldQtyByItem(item)
+            const goodQty = Number(onhandHoldByItem[GOOD_STATUS] || 0)
+            const holdQty = Number(onhandHoldByItem[HOLD_STATUS] || 0)
 
-            if (onhandHoldByItem[GOOD_STATUS] >= qty) {
+            if (goodQty >= qty) {
                 log.debug('good qty sufficient', {
-                    item, goodQty: onhandHoldByItem[GOOD_STATUS],
+                    item, goodQty,
                     requiredQty: qty
                 })
                 return
             }
 
+            if (holdQty < qty) return log.error({
+                title: 'Not enough',
+                details: `Item ${item} has ${holdQty} 
+                on hand, but ${qty} is required`
+            })
+
+            const scLine = statusChange.getLineCount({ sublistId: 'inventory' })
+
             statusChange.insertLine({
                 sublistId: 'inventory',
-                line: invLine
+                line: scLine
             })
 
             statusChange.setSublistValue({
                 sublistId: 'inventory',
                 fieldId: 'item',
-                line: invLine,
+                line: scLine,
                 value: item
-            })
-
-            if (onhandHoldByItem[HOLD_STATUS] < qty) return log.error({
-                title: 'Not enough',
-                details: `Item ${item} has ${onhandHoldByItem[HOLD_STATUS]} 
-                on hand, but ${qty} is required`
             })
 
             statusChange.setSublistValue({
                 sublistId: 'inventory',
                 fieldId: 'quantity',
-                line: invLine,
+                line: scLine,
                 value: qty
             })
 
             const invDetail = statusChange.getSublistSubrecord({
                 sublistId: 'inventory',
                 fieldId: 'inventorydetail',
-                line: invLine
+                line: scLine
             })
 
             invDetail.insertLine({
@@ -309,7 +313,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         })
         log.debug({
             title: 'buildStatusChangeLines',
-            details: `return: ${Object.values(aggregated).filter(l => l.item && l.qty > 0)}`
+            details: `return: ${JSON.stringify(Object.values(aggregated).filter(l => l.item && l.qty > 0))}`
         })
         return Object.values(aggregated).filter(l => l.item && l.qty > 0)
     }
