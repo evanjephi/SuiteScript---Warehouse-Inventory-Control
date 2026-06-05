@@ -6,8 +6,4 @@
   <notifyemails></notifyemails>
   <notifyowner>T</notifyowner>
   <scriptfile>[/SuiteScripts/WHIM Inventory MG Control CS EY.js]</scriptfile>
-  <scriptdeployments>
-    <!-- Note: You usually do NOT need a deployment for Suitelet Client Scripts -->
-    <!-- You reference the script path in the Suitelet code instead -->
-  </scriptdeployments>
 </clientscript>
