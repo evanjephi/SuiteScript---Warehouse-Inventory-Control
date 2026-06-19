@@ -428,8 +428,6 @@ define(['N/ui/serverWidget', 'N/search', 'N/task', 'N/record'], (ui, search, tas
             const isLineRelease = s.getValue('custcol_release_order')
             const qtyPrepared = Number(s.getValue('custcol_qty_prepared')) || 0
 
-
-
             if (!isMainRelease) return true
             if (!isStage) return true
             if (item && qtyfulf >= 0 && qtyfulf < qty) {
