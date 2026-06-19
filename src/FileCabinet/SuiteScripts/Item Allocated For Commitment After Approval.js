@@ -428,7 +428,15 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             const selectedLineItem = Object.entries(selectedPlan)
             let hasFulfillmentLines = false
 
-
+            log.debug({
+                title: 'Selected Plan',
+                details: JSON.stringify(selectedPlan)
+            })
+            
+            log.debug({
+                title: 'Selected Line Items',
+                details: JSON.stringify(selectedLineItem)
+            })  
             selectedLineItem.forEach(([lineItem, lineData]) => {
                 let requestedItemId = null
                 let requestedQty = 0
@@ -549,14 +557,14 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 return
             }
 
-            const fulfillmentId = fulfillment.save({
-                ignoreMandatoryFields: true
-            })
+            // const fulfillmentId = fulfillment.save({
+            //     ignoreMandatoryFields: true
+            // })
 
-            log.debug({
-                title: 'Packed fulfillment created',
-                details: `SO ${soId} IF ${fulfillmentId}`
-            })
+            // log.debug({
+            //     title: 'Packed fulfillment created',
+            //     details: `SO ${soId} IF ${fulfillmentId}`
+            // })
         } catch (e) {
             log.error({
                 title: `IF Failer SO ${soId}`,
