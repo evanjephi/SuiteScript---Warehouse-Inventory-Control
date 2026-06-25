@@ -423,7 +423,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 }
 
                 return acc
-            }, { direct: {}, kits: {} })
+            }, { direct: {}, bundle: {} })
 
             const selectedLineItem = Object.entries(selectedPlan)
             let hasFulfillmentLines = false
@@ -444,23 +444,23 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     title: 'Create fulfillment',
                     details: `lineItem: ${JSON.stringify(lineItem)}, lineData: ${JSON.stringify(lineData)}`
                 })
-                if (lineItem === 'kits') {
+                if (lineItem === 'bundle') {
                     Object.entries(lineData).forEach(([linekey, linedata]) => {
-                        // kitKey = 53771
-                        // kitData.kitQty = 10
-                        // kitData.components = { 927: 10, 930: 10 }
+                        // bundleKey = 53771
+                        // bundleData.bundleQty = 10
+                        // bundleData.components = { 927: 10, 930: 10 }
                         log.debug({
-                            title: 'Kit fulfillment',
+                            title: 'Bundle fulfillment',
                             details: `components: ${JSON.stringify(linedata.components)}`
                         })
-                        requestVsFulfillline(fulfillment, linedata.components)
+                        processFulfillment(fulfillment, linedata.components)
                     })
                 } else {
                     log.debug({
                         title: 'Direct fulfillment',
                         details: `components: ${JSON.stringify(lineData)}`
                     })
-                    requestVsFulfillline(fulfillment, lineData)
+                    processFulfillment(fulfillment, lineData)
                 }
 
 
@@ -632,7 +632,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     //     }
     // }
 
-    function requestVsFulfillline(rec, reqdata) {
+    function processFulfillment(rec, reqdata) {
         const requestedItems = Object.entries(reqdata).map(([itemId, qty]) => ({
             itemId: String(itemId),
             qty: Number(qty)
