@@ -432,11 +432,11 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 title: 'Selected Plan',
                 details: JSON.stringify(selectedPlan)
             })
-            
+
             log.debug({
                 title: 'Selected Line Items',
                 details: JSON.stringify(selectedLineItem)
-            })  
+            })
             selectedLineItem.forEach(([lineItem, lineData]) => {
                 let requestedItemId = null
                 let requestedQty = 0
@@ -449,104 +449,114 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                         // kitKey = 53771
                         // kitData.kitQty = 10
                         // kitData.components = { 927: 10, 930: 10 }
-                        
+                        log.debug({
+                            title: 'Kit fulfillment',
+                            details: `components: ${JSON.stringify(linedata.components)}`
+                        })
+                        requestVsFulfillline(fulfillment, linedata.components)
                     })
+                } else {
+                    log.debug({
+                        title: 'Direct fulfillment',
+                        details: `components: ${JSON.stringify(lineData)}`
+                    })
+                    requestVsFulfillline(fulfillment, lineData)
                 }
-                const index = fulfillment.getLineCount({ sublistId: 'item' })
+
 
                 //if (requestedQty <= 0) return
-                for (let i = 0; i < index; i++) {
-                    const itemtype = fulfillment.getSublistValue({
-                        sublistId: 'item',
-                        fieldId: 'itemtype',
-                        line: i
-                    })
-                    const defaultQty = Number(fulfillment.getSublistValue({
-                        sublistId: 'item',
-                        fieldId: 'quantity',
-                        line: i
-                    }))
+                // for (let i = 0; i < index; i++) {
+                // const itemtype = fulfillment.getSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'itemtype',
+                //     line: i
+                // })
+                // const defaultQty = Number(fulfillment.getSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'quantity',
+                //     line: i
+                // }))
 
-                    const ifItem = String(fulfillment.getSublistValue({
-                        sublistId: 'item',
-                        fieldId: 'item',
-                        line: i
-                    }))
+                // const ifItem = String(fulfillment.getSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'item',
+                //     line: i
+                // }))
 
-                    const components = itemtype === 'Kit' ? kits[ifItem]?.components : direct[ifItem]
-                    log.debug({
-                        title: 'components check',
-                        details: `line ${i} item ${ifItem} type ${itemtype} components ${JSON.stringify(components)}`
-                    })
+                //const components = itemtype === 'Kit' ? kits[ifItem]?.components : direct[ifItem]
+                // log.debug({
+                //     title: 'components check',
+                //     details: `line ${i} item ${ifItem} type ${itemtype} components ${JSON.stringify(components)}`
+                // })
 
-                    // const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
+                // const fulfillQty = defaultQty > 0 ? Math.min(requestedQty, defaultQty) : requestedQty
 
-                    // if (fulfillQty <= 0) return
-                    // fulfillment.setSublistValue({
-                    //     sublistId: 'item',
-                    //     fieldId: 'itemreceive',
-                    //     line: i,
-                    //     value: true
-                    // })
+                // if (fulfillQty <= 0) return
+                // fulfillment.setSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'itemreceive',
+                //     line: i,
+                //     value: true
+                // })
 
-                    // fulfillment.setSublistValue({
-                    //     sublistId: 'item',
-                    //     fieldId: 'quantity',
-                    //     line: i,
-                    //     value: fulfillQty
-                    // })
+                // fulfillment.setSublistValue({
+                //     sublistId: 'item',
+                //     fieldId: 'quantity',
+                //     line: i,
+                //     value: fulfillQty
+                // })
 
-                    // hasFulfillmentLines = true
+                // hasFulfillmentLines = true
 
-                    // const invdetail = fulfillment.getSublistSubrecord({
-                    //     sublistId: 'item',
-                    //     fieldId: 'inventorydetail',
-                    //     line: i
-                    // })
-                    // if (!invdetail) {
-                    //     log.error({
-                    //         title: 'Missing inventory detail subrecord',
-                    //         details: `SO ${soId} line ${i} item ${ifItem} type ${itemtype}`
-                    //     })
-                    //     continue
-                    // }
+                // const invdetail = fulfillment.getSublistSubrecord({
+                //     sublistId: 'item',
+                //     fieldId: 'inventorydetail',
+                //     line: i
+                // })
+                // if (!invdetail) {
+                //     log.error({
+                //         title: 'Missing inventory detail subrecord',
+                //         details: `SO ${soId} line ${i} item ${ifItem} type ${itemtype}`
+                //     })
+                //     continue
+                // }
 
-                    // let assignmentCount = invdetail.getLineCount({
-                    //     sublistId: 'inventoryassignment'
-                    // })
+                // let assignmentCount = invdetail.getLineCount({
+                //     sublistId: 'inventoryassignment'
+                // })
 
-                    // if (assignmentCount === 0) {
-                    //     invdetail.insertLine({
-                    //         sublistId: 'inventoryassignment',
-                    //         line: 0
-                    //     })
-                    //     assignmentCount = 1
-                    // }
+                // if (assignmentCount === 0) {
+                //     invdetail.insertLine({
+                //         sublistId: 'inventoryassignment',
+                //         line: 0
+                //     })
+                //     assignmentCount = 1
+                // }
 
-                    // for (let j = 0; j < assignmentCount; j++) {
-                    //     invdetail.setSublistValue({
-                    //         sublistId: 'inventoryassignment',
-                    //         fieldId: 'binnumber',
-                    //         value: 301,
-                    //         line: j
-                    //     })
+                // for (let j = 0; j < assignmentCount; j++) {
+                //     invdetail.setSublistValue({
+                //         sublistId: 'inventoryassignment',
+                //         fieldId: 'binnumber',
+                //         value: 301,
+                //         line: j
+                //     })
 
-                    //     invdetail.setSublistValue({
-                    //         sublistId: 'inventoryassignment',
-                    //         fieldId: 'inventorystatus',
-                    //         value: 4,
-                    //         line: j
-                    //     })
+                //     invdetail.setSublistValue({
+                //         sublistId: 'inventoryassignment',
+                //         fieldId: 'inventorystatus',
+                //         value: 4,
+                //         line: j
+                //     })
 
-                    //     invdetail.setSublistValue({
-                    //         sublistId: 'inventoryassignment',
-                    //         fieldId: 'quantity',
-                    //         value: j === 0 ? fulfillQty : 0,
-                    //         line: j
-                    //     })
+                //     invdetail.setSublistValue({
+                //         sublistId: 'inventoryassignment',
+                //         fieldId: 'quantity',
+                //         value: j === 0 ? fulfillQty : 0,
+                //         line: j
+                //     })
 
-                    // }
-                }
+                // }
+                // }
             })
 
             if (!hasFulfillmentLines) {
@@ -597,6 +607,60 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         return map
     }
 
+    // function requestVsFulfillline(rec, reqdata) {
+    //     const index = rec.getLineCount({ sublistId: 'item' })
+    //     for (let i = 0; i < index; i++) {
+    //         const itemtype = rec.getSublistValue({
+    //             sublistId: 'item',
+    //             fieldId: 'itemtype',
+    //             line: i
+    //         })
+    //         const defaultQty = Number(rec.getSublistValue({
+    //             sublistId: 'item',
+    //             fieldId: 'quantity',
+    //             line: i
+    //         }))
+    //         const ifItem = String(rec.getSublistValue({
+    //             sublistId: 'item',
+    //             fieldId: 'item',
+    //             line: i
+    //         }))
+
+    //         log.debug('Requested vs Fulfill line', {
+    //             reqdata, ifItem
+    //         })
+    //     }
+    // }
+
+    function requestVsFulfillline(rec, reqdata) {
+        const requestedItems = Object.entries(reqdata).map(([itemId, qty]) => ({
+            itemId: String(itemId),
+            qty: Number(qty)
+        }))
+
+        requestedItems.forEach(({ itemId, qty }) => {
+            const index = rec.getLineCount({ sublistId: 'item' })
+
+            for (let i = 0; i < index; i++) {
+                const ifItem = String(rec.getSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'item',
+                    line: i
+                }))
+
+                if (ifItem !== itemId) continue
+
+                log.debug('Requested vs Fulfill line', {
+                    itemId,
+                    qty,
+                    ifItem,
+                    line: i
+                })
+                break
+            }
+        })
+    }
+
     function getOnhandHoldQtyByItem(requestedItem) {
         let itemStatusQty = {}
 
@@ -631,8 +695,8 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
     function summarize(summary) {
         summary.mapSummary.errors.iterator().each((key, error) => {
-            log.error({ 
-                title: `Map error ${key}`, details: error 
+            log.error({
+                title: `Map error ${key}`, details: error
             })
             return true
         })
