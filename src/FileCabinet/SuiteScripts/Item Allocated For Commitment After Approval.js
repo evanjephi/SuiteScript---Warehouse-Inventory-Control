@@ -650,6 +650,76 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
                 if (ifItem !== itemId) continue
 
+                const defaultQty = Number(rec.getSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'quantity',
+                    line: i
+                }))
+
+                const fulfillQty = defaultQty > 0 ? Math.min(qty, defaultQty) : qty
+                if (fulfillQty <= 0) continue
+
+                rec.setSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'itemreceive',
+                    line: i,
+                    value: true
+                })
+
+                rec.setSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'quantity',
+                    line: i,
+                    value: fulfillQty
+                })
+
+                const invdetail = rec.getSublistSubrecord({
+                    sublistId: 'item',
+                    fieldId: 'inventorydetail',
+                    line: i
+                })
+                if (!invdetail) {
+                    log.error({
+                        title: 'Missing inventory detail subrecord',
+                        details: `SO ${soId} line ${i} item ${ifItem} type ${itemtype}`
+                    })
+                    continue
+                }
+
+                let assignmentCount = invdetail.getLineCount({
+                    sublistId: 'inventoryassignment'
+                })
+
+                if (assignmentCount === 0) {
+                    invdetail.insertLine({
+                        sublistId: 'inventoryassignment',
+                        line: 0
+                    })
+                    assignmentCount = 1
+                }
+
+                for (let j = 0; j < assignmentCount; j++) {
+                    invdetail.setSublistValue({
+                        sublistId: 'inventoryassignment',
+                        fieldId: 'binnumber',
+                        value: 301,
+                        line: j
+                    })
+
+                    invdetail.setSublistValue({
+                        sublistId: 'inventoryassignment',
+                        fieldId: 'inventorystatus',
+                        value: 4,
+                        line: j
+                    })
+
+                    invdetail.setSublistValue({
+                        sublistId: 'inventoryassignment',
+                        fieldId: 'quantity',
+                        value: j === 0 ? fulfillQty : 0,
+                        line: j
+                    })
+                }
                 log.debug('Requested vs Fulfill line', {
                     itemId,
                     qty,
