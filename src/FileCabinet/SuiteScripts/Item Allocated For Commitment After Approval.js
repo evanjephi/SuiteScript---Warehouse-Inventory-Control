@@ -163,6 +163,24 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             return
         }
 
+        const orderItemMode = resolveOrderItemMode(items)
+        if (orderItemMode === 'mixed') {
+            log.error({
+                title: 'Unexpected mixed order composition',
+                details: `SO ${soId} contains Assembly mixed with Kit/InvtPart; skipping automation`
+            })
+            return
+        }
+
+        if (orderItemMode === 'assembly-only') {
+            log.debug({
+                title: 'Assembly-only order',
+                details: `SO ${soId} - skipping kit/inventory status-change flow`
+            })
+            createPackedFulfillment(soId, items)
+            return
+        }
+
         const memo = 'Items made available for ' + tranId
 
         // Step 1: consolidated inventory status change for eligible items
@@ -196,6 +214,21 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
         createPackedFulfillment(soId, items)
     }
 
+    function resolveOrderItemMode(items) {
+        let hasAssembly = false
+        let hasKitOrInventory = false
+
+        items.forEach(({ itemType }) => {
+            const type = String(itemType || '')
+            if (type === 'Assembly') hasAssembly = true
+            if (type === 'Kit' || type === 'InvtPart') hasKitOrInventory = true
+        })
+
+        if (hasAssembly && hasKitOrInventory) return 'mixed'
+        if (hasAssembly) return 'assembly-only'
+        return 'kit-inventory'
+    }
+
     function collectEligibleSoItems(salesOrder) {
         const items = []
         const lineCount = salesOrder.getLineCount({ sublistId: 'item' }) || 0
@@ -209,7 +242,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 line: i
             }) || '')
 
-            if (itemType !== 'InvtPart' && itemType !== 'Kit') continue
+            if (itemType !== 'InvtPart' && itemType !== 'Kit' && itemType !== 'Assembly') continue
 
             const itemId = Number(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'item', line: i }))
             const itemText = salesOrder.getSublistText({ sublistId: 'item', fieldId: 'item', line: i })
@@ -423,7 +456,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 }
 
                 return acc
-            }, { direct: {}, bundle: {} })
+            }, { direct: {}, kits: {} })
 
             const selectedLineItem = Object.entries(selectedPlan)
             let hasFulfillmentLines = false
@@ -444,23 +477,23 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     title: 'Create fulfillment',
                     details: `lineItem: ${JSON.stringify(lineItem)}, lineData: ${JSON.stringify(lineData)}`
                 })
-                if (lineItem === 'bundle') {
+                if (lineItem === 'kits') {
                     Object.entries(lineData).forEach(([linekey, linedata]) => {
-                        // bundleKey = 53771
-                        // bundleData.bundleQty = 10
-                        // bundleData.components = { 927: 10, 930: 10 }
+                        // kitKey = 53771
+                        // kitData.kitQty = 10
+                        // kitData.components = { 927: 10, 930: 10 }
                         log.debug({
-                            title: 'Bundle fulfillment',
+                            title: 'Kit fulfillment',
                             details: `components: ${JSON.stringify(linedata.components)}`
                         })
-                        processFulfillment(fulfillment, linedata.components)
+                        processFulfillment(fulfillment, linedata.components, soId)
                     })
                 } else {
                     log.debug({
                         title: 'Direct fulfillment',
                         details: `components: ${JSON.stringify(lineData)}`
                     })
-                    processFulfillment(fulfillment, lineData)
+                    processFulfillment(fulfillment, lineData, soId)
                 }
 
 
@@ -559,22 +592,22 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 // }
             })
 
-            if (!hasFulfillmentLines) {
-                log.debug({
-                    title: 'No valid fulfillment quantities',
-                    details: `SO ${soId}`
-                })
-                return
-            }
+            // if (!hasFulfillmentLines) {
+            //     log.debug({
+            //         title: 'No valid fulfillment quantities',
+            //         details: `SO ${soId}`
+            //     })
+            //     return
+            // }
 
-            // const fulfillmentId = fulfillment.save({
-            //     ignoreMandatoryFields: true
-            // })
+            const fulfillmentId = fulfillment.save({
+                ignoreMandatoryFields: true
+            })
 
-            // log.debug({
-            //     title: 'Packed fulfillment created',
-            //     details: `SO ${soId} IF ${fulfillmentId}`
-            // })
+            log.debug({
+                title: 'Packed fulfillment created',
+                details: `SO ${soId} IF ${fulfillmentId}`
+            })
         } catch (e) {
             log.error({
                 title: `IF Failer SO ${soId}`,
@@ -632,7 +665,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
     //     }
     // }
 
-    function processFulfillment(rec, reqdata) {
+    function processFulfillment(rec, reqdata, soId) {
         const requestedItems = Object.entries(reqdata).map(([itemId, qty]) => ({
             itemId: String(itemId),
             qty: Number(qty)
@@ -648,16 +681,22 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     line: i
                 }))
 
-                if (ifItem !== itemId) continue
-
                 const defaultQty = Number(rec.getSublistValue({
                     sublistId: 'item',
-                    fieldId: 'quantity',
+                    fieldId: 'itemquantity',
                     line: i
                 }))
 
                 const fulfillQty = defaultQty > 0 ? Math.min(qty, defaultQty) : qty
+                log.debug('defaultQty', { ifItem, defaultQty, fulfillQty })
+
                 if (fulfillQty <= 0) continue
+                rec.setSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'quantity',
+                    line: i,
+                    value: fulfillQty
+                })
 
                 rec.setSublistValue({
                     sublistId: 'item',
@@ -666,19 +705,20 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                     value: true
                 })
 
-                rec.setSublistValue({
-                    sublistId: 'item',
-                    fieldId: 'quantity',
-                    line: i,
-                    value: fulfillQty
-                })
+                if (ifItem !== itemId) continue
 
                 const invdetail = rec.getSublistSubrecord({
                     sublistId: 'item',
                     fieldId: 'inventorydetail',
                     line: i
                 })
+
                 if (!invdetail) {
+                    const itemtype = String(rec.getSublistValue({
+                        sublistId: 'item',
+                        fieldId: 'itemtype',
+                        line: i
+                    }))
                     log.error({
                         title: 'Missing inventory detail subrecord',
                         details: `SO ${soId} line ${i} item ${ifItem} type ${itemtype}`
@@ -689,6 +729,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                 let assignmentCount = invdetail.getLineCount({
                     sublistId: 'inventoryassignment'
                 })
+
 
                 if (assignmentCount === 0) {
                     invdetail.insertLine({
@@ -718,6 +759,31 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
                         fieldId: 'quantity',
                         value: j === 0 ? fulfillQty : 0,
                         line: j
+                    })
+                }
+
+                let assignedTotal = 0
+                for (let k = 0; k < assignmentCount; k++) {
+                    assignedTotal += Number(invdetail.getSublistValue({
+                        sublistId: 'inventoryassignment',
+                        fieldId: 'quantity',
+                        line: k
+                    })) || 0
+                }
+
+                if (Number(fulfillQty) !== Number(assignedTotal)) {
+                    log.error({
+                        title: 'IF inventory detail quantity mismatch',
+                        details: JSON.stringify({
+                            soId,
+                            itemId,
+                            ifItem,
+                            ifLine: i,
+                            requestedQty: qty,
+                            fulfillQty,
+                            assignmentCount,
+                            assignedTotal
+                        })
                     })
                 }
                 log.debug('Requested vs Fulfill line', {
