@@ -253,6 +253,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
             const commitInventory = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'commitinventory', line: i })
             const lineUniqueKey = String(salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'lineuniquekey', line: i }))
             const qtyRemaining = Math.max(qtyOrder - qtyFulfilled, 0)
+            const ulid = salesOrder.getSublistValue({ sublistId: 'item', fieldId: 'custcol_ulid', line: i })
 
             if (!itemId || !itemText || qtyRemaining <= 0 || !lineUniqueKey) continue
             //if (qtyAvailable === qtyOrder) continue
@@ -460,6 +461,7 @@ define(['N/runtime', 'N/record', 'N/log', 'N/search'], (runtime, record, log, se
 
             const selectedLineItem = Object.entries(selectedPlan)
             let hasFulfillmentLines = false
+            let requestionId = null
 
             log.debug({
                 title: 'Selected Plan',
