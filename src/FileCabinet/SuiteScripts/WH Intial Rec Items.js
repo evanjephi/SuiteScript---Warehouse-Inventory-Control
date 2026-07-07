@@ -6,7 +6,7 @@
  * Purpose: Viso
  */
 
-define(['N/record', 'N/log'], (record, log) => {
+define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
 
     function beforeSubmit(context) {
         const nr = context.newRecord
@@ -17,6 +17,19 @@ define(['N/record', 'N/log'], (record, log) => {
         if ([context.UserEventType.CREATE
         ].includes(context.type)) {
             for (let i = 0; i < count; i++) {
+                const item = nr.getSublistValue({
+                    sublistId: 'item',
+                    fieldId: 'item',
+                    line: i
+                })
+
+                const is = search.lookupFields({
+                    type: search.Type.ITEM,
+                    id: item,
+                    columns: ['class']
+                })
+                if (is.class[0].value !== '8') continue
+                
                 const itemreceive = nr.getSublistValue({
                     sublistId: 'item',
                     fieldId: 'itemreceive',
@@ -54,13 +67,6 @@ define(['N/record', 'N/log'], (record, log) => {
                                 line: j
                             });
 
-                            invdetail.setSublistValue({
-                                sublistId: 'inventoryassignment',
-                                fieldId: 'inventorystatus',
-                                value: 4,
-                                line: j
-                            });
-
                             if (line === 1) {
                                 invdetail.setSublistValue({
                                     sublistId: 'inventoryassignment',
@@ -79,5 +85,6 @@ define(['N/record', 'N/log'], (record, log) => {
             }
         }
     }
+
     return { beforeSubmit }
 })
