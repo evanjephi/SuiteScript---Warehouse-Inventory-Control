@@ -16,6 +16,7 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
 
         if ([context.UserEventType.CREATE
         ].includes(context.type)) {
+            const toProcess = [8, 9, 12]
             for (let i = 0; i < count; i++) {
                 const item = nr.getSublistValue({
                     sublistId: 'item',
@@ -28,8 +29,9 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                     id: item,
                     columns: ['class']
                 })
-                if (is.class[0].value !== '8') continue
-                
+
+                if (!toProcess.includes(is.class[0].value)) continue
+
                 const itemreceive = nr.getSublistValue({
                     sublistId: 'item',
                     fieldId: 'itemreceive',
