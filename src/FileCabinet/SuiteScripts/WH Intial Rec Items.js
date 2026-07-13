@@ -13,7 +13,6 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
         if (nr.getValue('subsidiary') !== '2') return
         const count = nr.getLineCount({ sublistId: 'item' })
         if (!count) return
-
         if ([context.UserEventType.CREATE
         ].includes(context.type)) {
             const toProcess = [8, 9, 12]
@@ -23,21 +22,16 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                     fieldId: 'item',
                     line: i
                 })
-
                 const is = search.lookupFields({
                     type: search.Type.ITEM,
                     id: item,
                     columns: ['class']
                 })
-
-                if (!toProcess.includes(is.class[0].value)) continue
-
                 const itemreceive = nr.getSublistValue({
                     sublistId: 'item',
                     fieldId: 'itemreceive',
                     line: i
                 })
-                log.debug('itemreceive', itemreceive)
                 if (itemreceive === true) {
                     const item = nr.getSublistValue({
                         sublistId: 'item',
@@ -49,18 +43,17 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                         fieldId: 'quantity',
                         line: i
                     })
-
+                    log.debug('item qty details', {isName: typeof is.class[0]?.value, is: typeof is, item, qty, qty: typeof qty, item: typeof item})
+                    if (!toProcess.includes(Number(is.class[0].value))) continue
                     try {
                         const invdetail = nr.getSublistSubrecord({
                             sublistId: 'item',
                             fieldId: 'inventorydetail',
                             line: i
                         })
-                        //log.debug('invdetail', invdetail)
                         const line = invdetail.getLineCount({
                             sublistId: 'inventoryassignment'
                         })
-                        log.debug('line-count', line)
                         for (let j = 0; j < line; j++) {
                             invdetail.setSublistValue({
                                 sublistId: 'inventoryassignment',
@@ -68,7 +61,6 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                                 value: 301,
                                 line: j
                             });
-
                             if (line === 1) {
                                 invdetail.setSublistValue({
                                     sublistId: 'inventoryassignment',
@@ -78,8 +70,7 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                                 });
                             }
                         }
-
-                        log.debug('Catching qyy' + nr.id, qty)
+                        log.debug('Qyy' + nr.id, qty)
                     } catch (e) {
                         log.error('InventoryDetail Error', e.message)
                     }
