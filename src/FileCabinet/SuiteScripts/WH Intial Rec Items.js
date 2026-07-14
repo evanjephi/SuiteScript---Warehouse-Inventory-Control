@@ -8,12 +8,17 @@
 
 define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
 
-    function beforeSubmit(context) {
-        const nr = context.newRecord
+    function afterSubmit(context) {
+        const nr = record.load({
+            type: context.newRecord.type,
+            id: context.newRecord.id,
+            isDynamic: false
+        })
+        //const nr = context.newRecord
         if (nr.getValue('subsidiary') !== '2') return
         const count = nr.getLineCount({ sublistId: 'item' })
         if (!count) return
-        if ([context.UserEventType.CREATE
+        if ([context.UserEventType.EDIT
         ].includes(context.type)) {
             const toProcess = [8, 9, 12]
             for (let i = 0; i < count; i++) {
@@ -32,7 +37,7 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                     fieldId: 'itemreceive',
                     line: i
                 })
-                if (itemreceive === true) {
+                if (itemreceive === true || itemreceive === 'T') {
                     const item = nr.getSublistValue({
                         sublistId: 'item',
                         fieldId: 'item',
@@ -43,7 +48,6 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                         fieldId: 'quantity',
                         line: i
                     })
-                    log.debug('item qty details', {isName: typeof is.class[0]?.value, is: typeof is, item, qty, qty: typeof qty, item: typeof item})
                     if (!toProcess.includes(Number(is.class[0].value))) continue
                     try {
                         const invdetail = nr.getSublistSubrecord({
@@ -54,30 +58,26 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
                         const line = invdetail.getLineCount({
                             sublistId: 'inventoryassignment'
                         })
-                        for (let j = 0; j < line; j++) {
-                            invdetail.setSublistValue({
-                                sublistId: 'inventoryassignment',
-                                fieldId: 'binnumber',
-                                value: 301,
-                                line: j
-                            });
-                            if (line === 1) {
-                                invdetail.setSublistValue({
-                                    sublistId: 'inventoryassignment',
-                                    fieldId: 'quantity',
-                                    value: qty,
-                                    line: j
-                                });
-                            }
-                        }
-                        log.debug('Qyy' + nr.id, qty)
+                        invdetail.setSublistValue({
+                            sublistId: 'inventoryassignment',
+                            fieldId: 'binnumber',
+                            value: 301,
+                            line: 0
+                        })
+                        invdetail.setSublistValue({
+                            sublistId: 'inventoryassignment',
+                            fieldId: 'quantity',
+                            value: qty,
+                            line: 0
+                        })
                     } catch (e) {
                         log.error('InventoryDetail Error', e.message)
                     }
                 }
             }
+           nr.save()
         }
     }
 
-    return { beforeSubmit }
+    return { afterSubmit }
 })
