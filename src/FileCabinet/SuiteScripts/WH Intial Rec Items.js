@@ -14,7 +14,6 @@ define(['N/record', 'N/log', 'N/search'], (record, log, search) => {
             id: context.newRecord.id,
             isDynamic: false
         })
-        //const nr = context.newRecord
         if (nr.getValue('subsidiary') !== '2') return
         const count = nr.getLineCount({ sublistId: 'item' })
         if (!count) return
